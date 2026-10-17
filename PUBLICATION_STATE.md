@@ -1,5 +1,17 @@
 # Publication state
 
+## 2026-10-18 — Kuzushi Beacon 1.0.0.1 installation fix
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.1
+- ZIP: https://github.com/Roxyz0501/KuzushiBeacon/releases/download/v1.0.0.1/KuzushiBeacon-1.0.0.1.zip
+- Source/tag commit: `04c8f20a54ebbde45a98159d08e3ebc59adfe773`.
+- ZIP: 56,332 bytes; SHA-256 `F91995785FA1B9F05489EF60784A53A74DF0688924F32955E526A6559C2FA43B`.
+- User log confirmed 1.0.0.0 constructor failure: ObjectTable.LocalPlayer was accessed from the installer worker, producing Not on main thread. Now dispatches reconciliation through IFramework.RunOnFrameworkThread; inactive gates skip ObjectTable entirely. Queued work respects disposal and observes failures. No packet/game-action behavior was added.
+- Clean Release: zero warnings/errors. 25 new host lifecycle checks invoke the actual Plugin constructor on a worker with thread-enforcing service doubles; 64 prior checks also pass.
+- Anonymous repository, PNG icon and release ZIP HTTP 200; downloaded hash matches. Six allowlisted package entries and manifest version/URLs verified. Game installation/overlay acceptance is still unverified; restart clears failed 1.0.0.0 callbacks before update/reinstall.
+- Shared index commit: `92319fdad0225f03098d10660decc3ec1470724d`. Connector and anonymous commit-pinned URL verified version 1.0.0.1, preserving all other entries. Normal main URL may lag due to CDN caching.
+
+
 ## 2026-10-18 — Kuzushi Beacon 1.0.0.0 public preview
 
 - Published at the user's explicit request. Initial classification: new standalone plugin; author Roxyz0501; Apache-2.0; Dalamud API 15.
