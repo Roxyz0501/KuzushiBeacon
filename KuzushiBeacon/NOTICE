@@ -1,0 +1,12 @@
+Kuzushi Beacon: Copyright 2026 Roxyz0501.
+
+Shared language normalization, localization scaffolding and managed font setup
+adapt selected code from Bait Beacon, Copyright 2026 Roxyz0501, Apache-2.0:
+https://github.com/Roxyz0501/BaitBeacon
+They were modified for Kuzushi Beacon. No fish data or GatherBuddy code is used.
+
+StandardPluginTabs.cs is the unchanged Roxyz0501 workspace canonical template.
+Dalamud public APIs are used as host dependencies (goatcorp, AGPL-3.0):
+https://github.com/goatcorp/Dalamud
+The Noto Sans CJK font supplied by Dalamud is used through its managed font API.
+No font binary, game artwork, game data table or Dalamud binary is redistributed.

@@ -1,0 +1,15 @@
+{
+  "Author": "Roxyz0501",
+  "Name": "Kuzushi Beacon",
+  "InternalName": "KuzushiBeacon",
+  "Punchline": "自分が付与した崩しを線と頭上マーカーで表示。",
+  "Description": "PvPコンテンツ内で侍が使用している間、自分が付与した崩しの対象をローカル表示します。線・頭上マーカーの個別切替と色・サイズを設定できます。通常エリアでは監視を停止します。/kuzushibeacon で設定を開きます。",
+  "AssemblyVersion": "1.0.0.0",
+  "DalamudApiLevel": 15,
+  "ApplicableVersion": "any",
+  "RepoUrl": "https://github.com/Roxyz0501/KuzushiBeacon",
+  "IconUrl": "https://raw.githubusercontent.com/Roxyz0501/KuzushiBeacon/main/KuzushiBeacon/images/icon.png",
+  "Tags": ["pvp", "samurai", "kuzushi", "overlay"],
+  "LoadRequiredState": 0,
+  "CanUnloadAsync": false
+}

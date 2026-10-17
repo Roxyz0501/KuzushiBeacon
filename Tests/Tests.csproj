@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../KuzushiBeacon/Tracking.cs" Link="Tracking.cs" />
+    <Compile Include="../KuzushiBeacon/Configuration.cs" Link="Configuration.cs" />
+    <Compile Include="../KuzushiBeacon/Loc.cs" Link="Loc.cs" />
+    <Reference Include="Dalamud" HintPath="$(appdata)\XIVLauncher\addon\Hooks\dev\Dalamud.dll" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(appdata)\XIVLauncher\addon\Hooks\dev\Newtonsoft.Json.dll" />
+  </ItemGroup>
+</Project>

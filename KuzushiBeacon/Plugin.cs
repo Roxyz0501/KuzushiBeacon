@@ -1,0 +1,288 @@
+using System.Diagnostics;
+using System.Numerics;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Game;
+using Dalamud.Game.Command;
+using Dalamud.Plugin;
+using Dalamud.Plugin.Services;
+using Roxyz0501.Dalamud.CommonUi;
+
+namespace KuzushiBeacon;
+
+public sealed class Plugin : IDalamudPlugin
+{
+    private const string Command = "/kuzushibeacon";
+    private readonly IDalamudPluginInterface pi;
+    private readonly IClientState client;
+    private readonly IObjectTable objects;
+    private readonly IFramework framework;
+    private readonly IGameGui gui;
+    private readonly ICommandManager commands;
+    private readonly IPluginLog log;
+    private readonly Configuration config;
+    private readonly CommandInfo commandInfo;
+    private readonly Tracker tracker = new();
+    private readonly DalamudWorld world;
+    private LocalizedFonts? fonts;
+    private bool open;
+    private bool subscribed;
+    private bool dirty;
+    private bool disposed;
+    private bool faulted;
+    private double saveAfter;
+    private uint trackedOwner;
+    private static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+
+    public Plugin(IDalamudPluginInterface pi, IClientState client, IObjectTable objects,
+        IFramework framework, IGameGui gui, ICommandManager commands, IPluginLog log)
+    {
+        this.pi = pi;
+        this.client = client;
+        this.objects = objects;
+        this.framework = framework;
+        this.gui = gui;
+        this.commands = commands;
+        this.log = log;
+        world = new DalamudWorld(objects);
+        config = pi.GetPluginConfig() as Configuration ?? new Configuration();
+        config.Sanitize();
+        ClientLanguage? game;
+        try { game = client.ClientLanguage; } catch { game = null; }
+        Loc.CheckCompleteness();
+        if (config.InitializeLanguage(game, pi.UiLanguage)) pi.SavePluginConfig(config);
+        commandInfo = new CommandInfo((_, _) => Open()) { HelpMessage = T("CommandHelp") };
+        commands.AddHandler(Command, commandInfo);
+        client.TerritoryChanged += TerritoryChanged;
+        client.ClassJobChanged += JobChanged;
+        client.EnterPvP += Reconcile;
+        client.LeavePvP += Stop;
+        client.Login += Reconcile;
+        client.Logout += Logout;
+        pi.UiBuilder.OpenConfigUi += Open;
+        pi.UiBuilder.OpenMainUi += Open;
+        Reconcile();
+    }
+
+    private string T(string key) => Loc.Get(config.Language, key);
+    private string Label(string key) => T(key) + "###" + key;
+    private string Control(string key)
+    {
+        ImGui.TextWrapped(T(key));
+        ImGui.SetNextItemWidth(-1);
+        return "###" + key;
+    }
+    private bool Eligible() => !faulted && Rules.CanRun(config.Enabled, config.ShowLine, config.ShowMarker,
+        client.IsLoggedIn, client.IsPvPExcludingDen, objects.LocalPlayer?.ClassJob.RowId ?? 0);
+
+    private void Reconcile()
+    {
+        if (disposed) return;
+        if (!Eligible()) { Stop(); return; }
+        if (subscribed) return;
+        tracker.Clear();
+        framework.Update += Update;
+        pi.UiBuilder.Draw += DrawOverlay;
+        subscribed = true;
+    }
+
+    private void Stop()
+    {
+        if (subscribed)
+        {
+            framework.Update -= Update;
+            pi.UiBuilder.Draw -= DrawOverlay;
+            subscribed = false;
+        }
+        tracker.Clear();
+        trackedOwner = 0;
+    }
+
+    private void TerritoryChanged(uint _) { Stop(); Reconcile(); }
+    private void JobChanged(uint _) { Stop(); Reconcile(); }
+    private void Logout(int _, int __) => Stop();
+
+    private void Fail(Exception ex)
+    {
+        faulted = true;
+        Stop();
+        log.Error(ex, "Kuzushi overlay stopped. Toggle Enable in settings to retry.");
+    }
+
+    private void Update(IFramework _)
+    {
+        try
+        {
+            if (!Eligible()) { Stop(); return; }
+            var player = objects.LocalPlayer;
+            if (player is null || !player.IsValid() || player.IsDead)
+            {
+                tracker.Clear();
+                trackedOwner = 0;
+                return;
+            }
+            trackedOwner = player.EntityId;
+            tracker.Update(true, Now, player.EntityId, player.Position, config.MaxDistance, config.ScanIntervalMs, world);
+        }
+        catch (Exception ex) { Fail(ex); }
+    }
+
+    private void DrawOverlay()
+    {
+        try
+        {
+            if (!Eligible() || tracker.Targets.Count == 0) return;
+            var player = objects.LocalPlayer;
+            if (player is null || !player.IsValid() || player.IsDead || player.EntityId != trackedOwner) return;
+            var now = Now;
+            var draw = ImGui.GetBackgroundDrawList();
+            var lineColor = ImGui.ColorConvertFloat4ToU32(config.LineColor);
+            var markerColor = ImGui.ColorConvertFloat4ToU32(config.MarkerColor);
+            Vector2 from = default;
+            bool fromVisible = config.ShowLine && Project(player.Position + Vector3.UnitY * 0.8f, out from);
+            foreach (var target in tracker.Targets)
+            {
+                if (now >= target.ExpiresAt) continue;
+                var actor = objects[target.Actor.Index];
+                if (actor is null || !actor.IsValid() || actor.EntityId != target.Actor.EntityId
+                    || actor.GameObjectId != target.Actor.ObjectId || actor.IsDead || !actor.IsTargetable) continue;
+                var position = actor.Position;
+                if (Vector3.DistanceSquared(position, player.Position) > config.MaxDistance * config.MaxDistance) continue;
+                if (fromVisible && Project(position + Vector3.UnitY * 0.8f, out var to))
+                    draw.AddLine(from, to, lineColor, config.LineWidth);
+                if (config.ShowMarker && Project(position + Vector3.UnitY * config.MarkerHeight, out var head))
+                    DrawMarker(draw, head, config.MarkerSize, markerColor, config.MarkerColor.W);
+            }
+        }
+        catch (Exception ex) { Fail(ex); }
+    }
+
+    private bool Project(Vector3 position, out Vector2 screen)
+        => gui.WorldToScreen(position, out screen) && float.IsFinite(screen.X) && float.IsFinite(screen.Y);
+
+    private static void DrawMarker(ImDrawListPtr draw, Vector2 tip, float size, uint color, float alpha)
+    {
+        var left = tip + new Vector2(-size, -size * 1.5f);
+        var right = tip + new Vector2(size, -size * 1.5f);
+        draw.AddTriangleFilled(left, right, tip, color);
+        draw.AddTriangle(left, right, tip, ImGui.ColorConvertFloat4ToU32(new Vector4(0.08f, 0.08f, 0.1f, alpha)), 1.2f);
+    }
+
+    private void Open()
+    {
+        if (disposed || open) return;
+        fonts ??= new LocalizedFonts(pi.UiBuilder.FontAtlas);
+        open = true;
+        pi.UiBuilder.Draw += DrawSettingsWindow;
+    }
+
+    private void MarkDirty()
+    {
+        dirty = true;
+        saveAfter = Now + 0.6;
+        tracker.Clear();
+        Reconcile();
+    }
+
+    private void Save()
+    {
+        if (!dirty) return;
+        // Do not blindly retry a write whose outcome is unknown.
+        dirty = false;
+        try { pi.SavePluginConfig(config); }
+        catch (Exception ex) { log.Error(ex, "Could not save Kuzushi Beacon settings."); }
+    }
+
+    private void DrawSettingsWindow()
+    {
+        using var font = fonts!.Push(config.Language);
+        ImGui.SetNextWindowSize(new Vector2(680, 650), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSizeConstraints(new Vector2(470, 350), new Vector2(float.MaxValue));
+        if (ImGui.Begin("Kuzushi Beacon###KuzushiBeacon", ref open))
+        {
+            if (ImGui.BeginTabBar("KuzushiBeaconTabs"))
+            {
+                StandardPluginTabs.DrawStandardTrailingTabs(T("Settings"), "Settings", DrawSettings,
+                    T("LanguageSettings"), DrawLanguage, T("Support"), DrawSupport);
+                ImGui.EndTabBar();
+            }
+        }
+        ImGui.End();
+        if (dirty && (Now >= saveAfter || !open)) Save();
+        if (!open) pi.UiBuilder.Draw -= DrawSettingsWindow;
+    }
+
+    private void DrawSettings()
+    {
+        ImGui.TextWrapped(T("Explanation"));
+        ImGui.TextWrapped(T(faulted ? "Faulted" : subscribed ? "Active" : "Idle"));
+        bool changed = false;
+        if (ImGui.Checkbox(Label("Enabled"), ref config.Enabled))
+        {
+            faulted = false;
+            changed = true;
+        }
+        ImGui.Separator();
+        changed |= ImGui.Checkbox(Label("ShowLine"), ref config.ShowLine);
+        changed |= ImGui.ColorEdit4(Control("LineColor"), ref config.LineColor, ImGuiColorEditFlags.AlphaBar);
+        changed |= ImGui.SliderFloat(Control("LineWidth"), ref config.LineWidth, 0.5f, 5f, "%.1f px");
+        ImGui.Separator();
+        changed |= ImGui.Checkbox(Label("ShowMarker"), ref config.ShowMarker);
+        changed |= ImGui.ColorEdit4(Control("MarkerColor"), ref config.MarkerColor, ImGuiColorEditFlags.AlphaBar);
+        changed |= ImGui.SliderFloat(Control("MarkerSize"), ref config.MarkerSize, 5f, 30f, "%.0f px");
+        changed |= ImGui.SliderFloat(Control("MarkerHeight"), ref config.MarkerHeight, 1f, 5f, "%.1f m");
+        ImGui.TextWrapped(T("HeightHelp"));
+        ImGui.Separator();
+        changed |= ImGui.SliderFloat(Control("Distance"), ref config.MaxDistance, 5f, 100f, "%.0f m");
+        changed |= ImGui.SliderInt(Control("Interval"), ref config.ScanIntervalMs, 50, 500, "%d ms");
+        ImGui.TextWrapped(T("PerformanceHelp"));
+        if (changed) { config.Sanitize(); MarkDirty(); }
+        ImGui.Separator();
+        ImGui.TextUnformatted(T("Preview"));
+        var start = ImGui.GetCursorScreenPos();
+        var width = Math.Max(180f, ImGui.GetContentRegionAvail().X);
+        ImGui.InvisibleButton("###Preview", new Vector2(width, 75));
+        var draw = ImGui.GetWindowDrawList();
+        draw.AddRectFilled(start, start + new Vector2(width, 75), 0xFF24201C, 6);
+        var from = start + new Vector2(30, 55);
+        var to = start + new Vector2(width - 40, 55);
+        draw.AddCircleFilled(from, 5, 0xFFDDDDDD);
+        draw.AddCircleFilled(to, 5, 0xFFDDDDDD);
+        if (config.ShowLine) draw.AddLine(from, to, ImGui.ColorConvertFloat4ToU32(config.LineColor), config.LineWidth);
+        if (config.ShowMarker) DrawMarker(draw, to - new Vector2(0, 8), Math.Min(22, config.MarkerSize),
+            ImGui.ColorConvertFloat4ToU32(config.MarkerColor), config.MarkerColor.W);
+        ImGui.TextWrapped(string.Format(T("Metrics"), tracker.ScanCount, tracker.CandidateReads,
+            tracker.StatusListReads, tracker.LastScanMs));
+    }
+
+    private void DrawLanguage()
+    {
+        var code = StandardPluginTabs.DrawLanguageSelector(T("Language"), T("LanguageHelp"), config.Language ?? "en");
+        if (code is null || code == config.Language) return;
+        config.Language = code;
+        commandInfo.HelpMessage = T("CommandHelp");
+        dirty = true;
+        Save();
+    }
+
+    private void DrawSupport() => StandardPluginTabs.DrawSupportContent(
+        T("SupportHeading"), T("SupportText"), T("SupportRecipient"), T("OpenKoFi"));
+
+    public void Dispose()
+    {
+        disposed = true;
+        Stop();
+        client.TerritoryChanged -= TerritoryChanged;
+        client.ClassJobChanged -= JobChanged;
+        client.EnterPvP -= Reconcile;
+        client.LeavePvP -= Stop;
+        client.Login -= Reconcile;
+        client.Logout -= Logout;
+        pi.UiBuilder.OpenConfigUi -= Open;
+        pi.UiBuilder.OpenMainUi -= Open;
+        pi.UiBuilder.Draw -= DrawSettingsWindow;
+        commands.RemoveHandler(Command);
+        Save();
+        fonts?.Dispose();
+    }
+}
+
