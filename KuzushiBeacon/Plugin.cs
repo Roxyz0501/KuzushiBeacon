@@ -27,7 +27,7 @@ public sealed class Plugin : IDalamudPlugin
     private bool open;
     private bool subscribed;
     private bool dirty;
-    private bool disposed;
+    private volatile bool disposed;
     private bool faulted;
     private double saveAfter;
     private uint trackedOwner;
@@ -71,18 +71,34 @@ public sealed class Plugin : IDalamudPlugin
         ImGui.SetNextItemWidth(-1);
         return "###" + key;
     }
-    private bool Eligible() => !faulted && Rules.CanRun(config.Enabled, config.ShowLine, config.ShowMarker,
-        client.IsLoggedIn, client.IsPvPExcludingDen, objects.LocalPlayer?.ClassJob.RowId ?? 0);
+    private bool Eligible() => !disposed && !faulted && config.Enabled && (config.ShowLine || config.ShowMarker)
+        && client.IsLoggedIn && client.IsPvPExcludingDen
+        && objects.LocalPlayer?.ClassJob.RowId == Rules.SamuraiJob;
 
-    private void Reconcile()
+    private void Reconcile() => _ = ReconcileAsync();
+
+    private async Task ReconcileAsync()
     {
         if (disposed) return;
-        if (!Eligible()) { Stop(); return; }
-        if (subscribed) return;
-        tracker.Clear();
-        framework.Update += Update;
-        pi.UiBuilder.Draw += DrawOverlay;
-        subscribed = true;
+        try
+        {
+            // Constructors run on the installer worker thread. ObjectTable must only be
+            // accessed on the framework thread, even when loading directly into PvP.
+            await framework.RunOnFrameworkThread(() =>
+            {
+                if (disposed) return; // Unloaded before the queued first tick.
+                if (!Eligible()) { Stop(); return; }
+                if (subscribed) return;
+                tracker.Clear();
+                framework.Update += Update;
+                pi.UiBuilder.Draw += DrawOverlay;
+                subscribed = true;
+            });
+        }
+        catch (Exception ex)
+        {
+            if (!disposed) Fail(ex);
+        }
     }
 
     private void Stop()

@@ -1,5 +1,13 @@
 # Validation — 2026-10-18
 
+## 1.0.0.1 installation fix
+
+- User's Dalamud log confirmed `InvalidOperationException: Not on main thread!` from `ObjectTable.LocalPlayer` during the 1.0.0.0 constructor. Download/extraction succeeded; plugin construction failed and the installer subsequently removed the DLL.
+- Reconciliation now runs through public `IFramework.RunOnFrameworkThread`. Constructor initialization never reads the object table from the installer worker. Inactive gates short-circuit before any player access. Queued work checks disposal and observes/logs exceptions.
+- 25 new host lifecycle regression checks invoke the actual Plugin constructor on a worker with thread-enforcing service doubles. Cover loading inside/outside PvP, one-shot dispatch, no inactive player reads or persistent subscriptions, duplicate events, PvP exit, full unsubscription, disposal before dispatch and deferred errors. All passed, along with 64 existing tests.
+- This verifies the logged threading failure offline, not a successful install inside the live game. An FFXIV restart clears callbacks from any failed 1.0.0.0 construction before reinstalling/updating.
+- Build source paths are mapped to `/_/KuzushiBeacon` so diagnostic symbols do not embed developer filesystem paths.
+
 ## Automated verification
 
 - Release on .NET SDK 10.0.401 / Dalamud.NET.Sdk 15.0.0, installed API 15 host references.
