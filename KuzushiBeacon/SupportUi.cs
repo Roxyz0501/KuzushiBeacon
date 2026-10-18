@@ -92,21 +92,30 @@ public sealed partial class Plugin
     private void DrawFeatureGroup(int group)
     {
         bool changed=false;
+        ImGui.TextUnformatted(FeatureCatalog.Group(group,config.Language));
+        ImGui.TextWrapped(group switch
+        {
+            0=>L("最低HP・最寄り・味方への対象変更で使う射程と除外条件です。コマンドは一覧ページからコピーできます。","Ranges and filters for lowest-HP, nearest and friendly targeting. Copy commands from the command page."),
+            2=>L("自分が付けた崩しの表示、LBの通知、斬鉄剣の対象選択条件を調整します。","Configure your Kuzushi highlights, LB alerts and Zantetsuken target conditions."),
+            _=>L("必要な表示・通知だけをオンにできます。詳しい動作や見た目は下の設定で調整します。","Enable the displays and alerts you need. Adjust their behavior and appearance below.")
+        });
+        ImGui.Separator();
         var enabled=!S.DisabledGroups.Contains(group);
-        if(ImGui.Checkbox(L("このジャンルを有効にする","Enable this category"),ref enabled))
+        if(ImGui.Checkbox(L("このカテゴリの補助機能を使う","Enable this category"),ref enabled))
         {if(enabled)S.DisabledGroups.Remove(group);else S.DisabledGroups.Add(group);changed=true;}
-        if(ImGui.Button(L("このジャンルを全てオン","Enable all in category")))
+        if(ImGui.Button(L("表示・通知をまとめてオン","Enable category features")))
         {foreach(var f in FeatureCatalog.All.Where(f=>f.Group==group&&f.Id!=99))S.Features.Add(f.Id);changed=true;}
         ImGui.SameLine();
-        if(ImGui.Button(L("このジャンルを全てオフ","Disable all in category")))
+        if(ImGui.Button(L("表示・通知をまとめてオフ","Disable category features")))
         {foreach(var f in FeatureCatalog.All.Where(f=>f.Group==group))S.Features.Remove(f.Id);changed=true;}
         foreach(var f in FeatureCatalog.All.Where(f=>f.Group==group))
         {
             var value=S.Features.Contains(f.Id);
-            if(ImGui.Checkbox($"{f.Id}. {FeatureCatalog.Name(f.Id,config.Language)}###feature{f.Id}",ref value))
+            if(ImGui.Checkbox($"{FeatureCatalog.Name(f.Id,config.Language)}###feature{f.Id}",ref value))
             {if(value)S.Features.Add(f.Id);else S.Features.Remove(f.Id);changed=true;}
         }
         ImGui.Separator();
+        ImGui.TextUnformatted(L("動作・表示の調整","Behavior and appearance"));
         switch(group)
         {
             case 0:
