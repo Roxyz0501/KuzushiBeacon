@@ -1,3 +1,12 @@
+## 2026-10-19 — PvP Supporter 1.1.0.1
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.1
+- Source/tag: 45cdcc539bbf58af1402ec8083e474576048a43b.
+- ZIP: 164,898 bytes; SHA256 446AA2B51E9448579E4E84227C848C22B6F63242C591D1E99DA6877AEE8BE025. Anonymous redownload matches; eight allowed entries and 1.1.0.1/InternalName verified. Public repository HTTP 200.
+- Shared index commit: a1c45325a40baa090ba2efff1393f1aae27eac85. Connector verifies 1.1.0.1; all ten other entries unchanged. Ordinary raw URL initially cached 1.1.0.0.
+- Top common tabs preserved unchanged; sidebar only inside PvP Supporter, Job settings → Samurai, command copy page, command behavior settings, clearer labels without feature numbering. Enemy target range capped at melee/tank 3m or ranged/healer 20m; ally cap 20m, including saved options and fixed/explicit commands.
+- 205 managed checks, 48 real-host lifecycle checks, 84 headless production UI frames pass. No live-game or OS clipboard validation; no unpublished installed-file overwrite.
+
 ## 2026-10-19 — PvP Supporter 1.1.0.0 expansion + Ledger integration
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.0
