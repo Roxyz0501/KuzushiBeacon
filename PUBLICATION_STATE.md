@@ -1,3 +1,12 @@
+## 2026-10-19 — PvP Supporter 1.1.0.3 hierarchy and styles
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.3
+- Source/tag: fd1a5e76bcdad238e1b4919ba8dd22862f93cbf6.
+- ZIP: 182,879 bytes; SHA256 BE007CBC0BF2E873988459EDEDB46A7C76D72B3EEC40BBF4B46A6D2C14DAC333. Anonymous redownload matches, eight entries/version/internal identity verified. Public repository HTTP 200.
+- Shared index commit: d3d0d7894d1fab226920047622a6ed25b290453d. Connector, anonymous pinned URL AND ordinary main URL return 1.1.0.3; ten other entries unchanged.
+- Feature hierarchy in Samurai and other sidebar categories; timer/best-target styles; cached common exclusions; duplicate acquisition alerts merged across profiles; shared-job full LB alert; picker-only color editing with read-only RGB. Standard common top tabs unchanged.
+- 307 managed checks, 59 real-host checks and 473 headless UI frames pass. Live PvP drawing/actions/audio unverified; no unpublished installed-file overwrite.
+
 ## 2026-10-19 — PvP Supporter 1.1.0.2 settings audit
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.2
