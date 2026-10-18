@@ -1,5 +1,15 @@
 # Publication state
 
+## 2026-10-19 — Kuzushi Beacon 1.0.0.5 overhead maximum count
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.5
+- ZIP: https://github.com/Roxyz0501/KuzushiBeacon/releases/download/v1.0.0.5/KuzushiBeacon-1.0.0.5.zip
+- Source/tag: 8dc34b2ccde9537439459e0b7d8bf36a6fd331dc. ZIP: 62,712 bytes; SHA-256 3D668FEB509A2BB7620E2847B78399EE82583B2DC739C87ED413BB231E186980. Anonymous download matches; six entries and manifest verified; repository HTTP 200 and icon image/png.
+- Shared index: ee77a8e672ada2a803638e2a3aed6a0989c1a2a6. Connector and anonymous commit-pinned URL verified; other ten entries unchanged. Normal main URL initially cached 1.0.0.4.
+- Display own maximum Kuzushi coverage above player only with full PvP LB and reachable own-marked targets. Count includes center; individual visibility toggle defaults on; marker color/height shared. No action execution on display path. Reuses bounded tracker scan; calculation only at scan interval, gauge/expiry rechecked at draw.
+- 85 managed + 34 host tests pass; Release zero warnings/errors. Native gauge behavior, live head placement and actual hit count remain unverified. Installed files not overwritten locally.
+
+
 ## 2026-10-19 — Kuzushi Beacon 1.0.0.4 explicit Zantetsuken command
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.4
