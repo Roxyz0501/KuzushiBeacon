@@ -58,8 +58,7 @@ public sealed partial class Plugin
                 nextLowHpCommand=Now+.25;
                 if(command=="/pvpmute")
                 {
-                    if(!On(81))return;
-                    var seconds=string.IsNullOrWhiteSpace(args)?60:double.TryParse(args,NumberStyles.Float,CultureInfo.InvariantCulture,out var value)&&double.IsFinite(value)?Math.Clamp(value,0,3600):-1;
+                    var seconds=string.IsNullOrWhiteSpace(args)?S.MuteSeconds:double.TryParse(args,NumberStyles.Float,CultureInfo.InvariantCulture,out var value)&&double.IsFinite(value)?Math.Clamp(value,0,3600):-1;
                     if(seconds>=0){muteUntil=Now+seconds;localSound.Stop();}return;
                 }
                 if(!config.Enabled||!client.IsLoggedIn||!client.IsPvPExcludingDen)return;
@@ -74,24 +73,23 @@ public sealed partial class Plugin
                 }
                 if(command=="/pvpassist")
                 {
-                    if(!On(72)||!string.IsNullOrWhiteSpace(args))return;
+                    if(!string.IsNullOrWhiteSpace(args))return;
                     var ally=objects.PlayerObjects.OfType<IPlayerCharacter>().Take(Tracker.MaxCandidates).FirstOrDefault(a=>a.GameObjectId==trackedAlly&&a.IsValid()&&!a.IsDead&&GameLowHpTarget.Ally(a));
                     var enemy=ally==null?null:objects.PlayerObjects.OfType<IPlayerCharacter>().Take(Tracker.MaxCandidates).FirstOrDefault(a=>a.GameObjectId==ally.TargetObjectId&&a.IsValid()&&!a.IsDead&&a.IsTargetable&&GameLowHpTarget.Enemy(a));
-                    var ok=enemy!=null&&!StatusRules.Excluded(enemy,S.ExcludeGuard,S.ExcludeInvulnerable)&&(!On(4)||OnScreen(enemy.Position));
+                    var ok=enemy!=null&&LowHpTarget.InRange(player.Position,player.HitboxRadius,enemy.Position,enemy.HitboxRadius,SupportOptions.JobRange(player.ClassJob.RowId,S.MeleeRange,S.RangedRange))&&!StatusRules.Excluded(enemy,S.ExcludeGuard,S.ExcludeInvulnerable)&&(!On(4)||OnScreen(enemy.Position));
                     if(ok&&!On(99))targets.Target=enemy;
                     CountCommand("assist",ok,"no observed ally target");return;
                 }
                 var friendly=command=="/pvpally";
-                if(!friendly&&S.DisabledGroups.Contains(0))return;
-                if(friendly&&!On(70))return;
                 var range=friendly?S.AllyRange:SupportOptions.JobRange(player.ClassJob.RowId,S.MeleeRange,S.RangedRange);
                 var fixedRange=command switch{"/pvplowhp3"=>3f,"/pvplowhp5"=>5f,"/pvplowhp20"=>20f,_=>0};
                 if(fixedRange>0){if(!string.IsNullOrWhiteSpace(args))return;range=fixedRange;}
                 else if(!string.IsNullOrWhiteSpace(args)&&args.Trim()!="auto")
                 {
-                    if(!float.TryParse(args,NumberStyles.Float,CultureInfo.InvariantCulture,out range)||!float.IsFinite(range)||range<1||range>50)
-                    {if(messages.Message(Now))chat.Print(L("射程は1～50mで指定してください。","Specify a range between 1 and 50 metres."));return;}
+                    if(!float.TryParse(args,NumberStyles.Float,CultureInfo.InvariantCulture,out range)||!float.IsFinite(range)||range<1||range>20)
+                    {if(messages.Message(Now))chat.Print(L("射程は1～20mで指定してください。","Specify a range between 1 and 20 metres."));return;}
                 }
+                range=SupportOptions.CommandRange(player.ClassJob.RowId,range,friendly);
                 var success=lowHpTarget.Select(range,S,OnScreen,command=="/pvpnearest",friendly);
                 CountCommand(command,success,lowHpTarget.LastReason);
                 if(!success&&messages.Message(Now))chat.Print(T("LowHpUnavailable"));

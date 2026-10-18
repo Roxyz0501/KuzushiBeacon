@@ -8,23 +8,86 @@ namespace KuzushiBeacon;
 public sealed partial class Plugin
 {
     private readonly List<Vector2> occupiedLabels=[];
-    private void DrawFeatureTabs()
+    private int selectedSettingsPage;
+    private void DrawSettingsNavigation()
     {
-        for(int group=0;group<8;group++)
+        var available=ImGui.GetContentRegionAvail().X;
+        var width=Math.Clamp(available*.23f,150,230);
+        if(ImGui.BeginChild("SettingsNavigation",new Vector2(width,0),true))
         {
-            if(!ImGui.BeginTabItem(FeatureCatalog.Group(group,config.Language)+"###supportGroup"+group))continue;
-            if(ImGui.BeginChild("GroupScroll"+group,Vector2.Zero))DrawFeatureGroup(group);
-            ImGui.EndChild();ImGui.EndTabItem();
+            void Item(int page,string title)
+            {
+                if(ImGui.Selectable(title+"###page"+page,selectedSettingsPage==page,ImGuiSelectableFlags.None,new Vector2(0,26)))selectedSettingsPage=page;
+            }
+            for(int group=0;group<8;group++)
+                Item(group,group==2?L("ジョブ設定","Job settings"):FeatureCatalog.Group(group,config.Language));
+            Item(9,L("コマンド一覧・コピー","Commands / copy"));
+            Item(8,L("戦績・キルログ","KDA / kill feed"));
+
         }
-        if(ImGui.BeginTabItem(L("戦績・キルログ","KDA / kill feed")+"###ledger"))
+        ImGui.EndChild();ImGui.SameLine();
+        if(ImGui.BeginChild("SettingsPage",Vector2.Zero))
         {
-            var enabled=S.LedgerEnabled;
-            if(ImGui.Checkbox(L("戦績記録を有効にする","Enable match ledger"),ref enabled))
-            {S.LedgerEnabled=enabled;MarkDirty();ReconcileLedger();}
-            if(ledger!=null)ledger.DrawEmbedded(config.Language);
-            else ImGui.TextWrapped(L("PvP Ledgerの戦績・キルログ・履歴・CSV・任意のDiscord通知を統合。旧プラグインと同時に有効にすると記録が重複します。","Integrated PvP Ledger: KDA, kill feed, history, CSV and optional Discord. Disable the separate Ledger plugin to avoid duplicate recording."));
-            ImGui.EndTabItem();
+            if(selectedSettingsPage==2)
+            {
+                ImGui.TextUnformatted(L("ジョブ設定","Job settings"));
+                if(ImGui.BeginTabBar("JobSettingsTabs"))
+                {
+                    if(ImGui.BeginTabItem(L("侍","Samurai")+"###Samurai"))
+                    {DrawFeatureGroup(2);ImGui.EndTabItem();}
+                    ImGui.EndTabBar();
+                }
+            }
+            else if(selectedSettingsPage<8)DrawFeatureGroup(selectedSettingsPage);
+            else if(selectedSettingsPage==8)DrawLedgerSettings();
+            else DrawCommandReference();
         }
+        ImGui.EndChild();
+    }
+    private void DrawCommandReference()
+    {
+        ImGui.TextWrapped(L("各ボタンでコマンドだけをコピーします。コピーでは実行しません。射程・除外条件は対象選択、斬鉄剣はジョブ設定、ミュート時間は通知・表示で変更できます。敵選択は近接・タンク3m、遠隔・ヒーラー20mが上限です。", "Each button copies a command without executing it. Configure ranges and filters in Targeting, LB in Job settings, and mute duration in Alerts. Enemy selection is capped at 3m for melee/tanks and 20m for ranged/healers."));
+        ImGui.Separator();
+        CopyCommand(L("設定","Settings"),"/pvpsupporter");
+        CopyCommand(L("旧設定コマンド","Legacy settings"),"/kuzushibeacon");
+        ImGui.Separator();
+        CopyCommand(L("最低HP：ジョブ別","Lowest HP: job range"),"/pvplowhp");
+        CopyCommand(L("最低HP：自動","Lowest HP: auto"),"/pvplowhp auto");
+        CopyCommand(L("最低HP：3m","Lowest HP: 3m"),"/pvplowhp3");
+        CopyCommand(L("最低HP：5m","Lowest HP: 5m"),"/pvplowhp5");
+        CopyCommand(L("最低HP：20m","Lowest HP: 20m"),"/pvplowhp20");
+        CopyCommand(L("最低HP：射程指定例","Lowest HP: custom range"),"/pvplowhp 5");
+        CopyCommand(L("最寄りの敵","Nearest enemy"),"/pvpnearest");
+        CopyCommand(L("最寄り：射程指定例","Nearest: custom range"),"/pvpnearest 20");
+        ImGui.Separator();
+        CopyCommand(L("最低HPの味方","Lowest HP ally"),"/pvpally");
+        CopyCommand(L("味方：射程指定例","Ally: custom range"),"/pvpally 20");
+        CopyCommand(L("選択中の味方を追跡","Track selected ally"),"/pvptrack");
+        CopyCommand(L("味方の追跡を解除","Clear tracked ally"),"/pvptrack clear");
+        CopyCommand(L("追跡味方の対象を選択","Assist tracked ally"),"/pvpassist");
+        ImGui.Separator();
+        CopyCommand(L("侍：最適対象を選択","Samurai: select best target"),"/pvpztarget");
+        CopyCommand(L("侍：対象選択と斬鉄剣","Samurai: select and use LB"),"/kuzushizantetsuken");
+        ImGui.Separator();
+        CopyCommand(L("通知音を一時ミュート","Mute notifications"),"/pvpmute");
+        CopyCommand(L("通知音を60秒ミュート","Mute for 60 seconds"),"/pvpmute 60");
+        CopyCommand(L("ミュート解除","Unmute"),"/pvpmute 0");
+    }
+    private void CopyCommand(string title,string command)
+    {
+        ImGui.PushID(command);
+        if(ImGui.Button(L("コピー","Copy")))ImGui.SetClipboardText(command);
+        ImGui.SameLine();ImGui.TextUnformatted(command);
+        ImGui.TextWrapped(title);
+        ImGui.PopID();
+    }
+    private void DrawLedgerSettings()
+    {
+        var enabled=S.LedgerEnabled;
+        if(ImGui.Checkbox(L("戦績記録を有効にする","Enable match ledger"),ref enabled))
+        {S.LedgerEnabled=enabled;MarkDirty();ReconcileLedger();}
+        if(ledger!=null)ledger.DrawEmbedded(config.Language);
+        else ImGui.TextWrapped(L("PvP Ledgerの戦績・キルログ・履歴・CSV・任意のDiscord通知を統合。旧プラグインと同時に有効にすると記録が重複します。","Integrated PvP Ledger: KDA, kill feed, history, CSV and optional Discord. Disable the separate Ledger plugin to avoid duplicate recording."));
     }
     private void DrawFeatureGroup(int group)
     {
@@ -48,9 +111,9 @@ public sealed partial class Plugin
         {
             case 0:
                 ImGui.TextWrapped("/pvplowhp [auto|3|5|20]  /pvplowhp3  /pvplowhp5  /pvplowhp20\n/pvpnearest [auto|3|5|20]\n/pvpally [20]  /pvptrack  /pvpassist  /pvpztarget");
-                changed|=ImGui.SliderFloat(L("近接・タンクの射程","Melee / tank range"),ref S.MeleeRange,1,50,"%.1f m");
-                changed|=ImGui.SliderFloat(L("遠隔・ヒーラーの射程","Ranged / healer range"),ref S.RangedRange,1,50,"%.1f m");
-                changed|=ImGui.SliderFloat(L("味方選択の射程","Ally selection range"),ref S.AllyRange,1,50,"%.1f m");
+                changed|=ImGui.SliderFloat(L("近接・タンクの射程","Melee / tank range"),ref S.MeleeRange,1,3,"%.1f m");
+                changed|=ImGui.SliderFloat(L("遠隔・ヒーラーの射程","Ranged / healer range"),ref S.RangedRange,1,20,"%.1f m");
+                changed|=ImGui.SliderFloat(L("味方選択の射程","Ally selection range"),ref S.AllyRange,1,20,"%.1f m");
                 changed|=ImGui.Checkbox(L("通常選択：防御を除外","Targeting: exclude Guard"),ref S.ExcludeGuard);
                 changed|=ImGui.Checkbox(L("通常選択：既知の無敵を除外","Targeting: exclude known invulnerability"),ref S.ExcludeInvulnerable);
                 ImGui.TextWrapped(L("最低HPは残りHP実数で比較。autoまたは引数なしでジョブに合わせます。画面内限定は投影位置で判定し、壁の遮蔽判定とは異なります。","Lowest HP compares absolute HP. No argument or auto uses your job range. On-screen checks projection, not wall occlusion."));break;
@@ -77,6 +140,7 @@ public sealed partial class Plugin
                 changed|=ImGui.SliderInt(L("人数不利の差","Disadvantage threshold"),ref S.Disadvantage,1,20);
                 ImGui.TextWrapped(L("味方を選択して /pvptrack、解除は /pvptrack clear。方向表示は地形・通行可否を保証しません。","Select an ally and run /pvptrack; /pvptrack clear removes tracking. Direction estimates do not verify terrain or a safe route."));break;
             case 5:
+                changed|=ImGui.SliderInt(L("ミュートの既定秒数","Default mute seconds"),ref S.MuteSeconds,1,3600);
                 changed|=ImGui.Checkbox(L("通知をまとめてオン","Enable all notifications"),ref S.Notifications);
                 changed|=ImGui.Checkbox(L("通知SEをまとめてオン","Enable notification audio"),ref S.Sound);
                 changed|=ImGui.SliderFloat(L("SE音量","Sound volume"),ref S.Volume,0,1,"%.2f");

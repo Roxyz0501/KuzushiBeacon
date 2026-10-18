@@ -110,7 +110,7 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 if (disposed || Now - requestedAt > 0.5 || Now < nextCommand || zantetsukenAction.Gate.Pending) return;
                 nextCommand = Now + 0.25;
-                if (!config.Enabled || S.DisabledGroups.Contains(2) || !client.IsLoggedIn || !client.IsPvPExcludingDen || targetOnly && !On(42)) { CommandUnavailable(); return; }
+                if (!config.Enabled || !client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable(); return; }
                 var player = objects.LocalPlayer;
                 if (player is null || !player.IsValid() || player.IsDead || player.ClassJob.RowId != Rules.SamuraiJob)
                 { CommandUnavailable(); return; }
@@ -276,7 +276,7 @@ public sealed partial class Plugin : IDalamudPlugin
         try
         {
             DrawSupportOverlay();
-            if (!MonitoringAllowed() || S.DisabledGroups.Contains(2) || tracker.Targets.Count == 0) return;
+            if (!MonitoringAllowed() || tracker.Targets.Count == 0) return;
             var player = objects.LocalPlayer;
             if (player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead || player.EntityId != trackedOwner) return;
             var now = Now;
@@ -371,7 +371,8 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             if (ImGui.BeginTabBar("KuzushiBeaconTabs", ImGuiTabBarFlags.FittingPolicyScroll))
             {
-                DrawFeatureTabs();
+                if(ImGui.BeginTabItem("PvP Supporter###Supporter"))
+                {DrawSettingsNavigation();ImGui.EndTabItem();}
                 StandardPluginTabs.DrawStandardTrailingTabs(T("Settings"), "Settings", DrawSettings,
                     T("LanguageSettings"), DrawLanguage, T("Support"), DrawSupport);
                 ImGui.EndTabBar();
@@ -393,7 +394,7 @@ public sealed partial class Plugin : IDalamudPlugin
         {config.Enabled=false;S.Features.Clear();config.ShowLine=config.ShowMarker=config.ShowMaxCount=false;MarkDirty();}
         if(ImGui.Checkbox(L("通知をまとめてオン","Enable all notifications"),ref S.Notifications))MarkDirty();
         if(ImGui.Checkbox(L("SEをまとめてオン","Enable notification audio"),ref S.Sound))MarkDirty();
-        ImGui.TextWrapped(L("設定は左側のジャンルタブに分かれています。無効な機能の通知は発生しません。","Settings are organized in the category tabs. Disabled features do not notify."));
+        ImGui.TextWrapped(L("設定は左側のメニューに分かれています。無効な機能の通知は発生しません。","Settings are organized in the left menu. Disabled features do not notify."));
     }
     private void DrawLegacy(int section)
     {

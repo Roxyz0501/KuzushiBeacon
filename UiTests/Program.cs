@@ -41,6 +41,17 @@ internal static unsafe class Program
    }
    for(int i=0;i<10;i++){ImGui.NewFrame();Call("DrawSettingsWindow");ImGui.Render();}
    Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"settings-en.bmp"));
+   foreach(var language in new[]{"ja","en"})
+   {
+    UiStub.Config.Language=language;
+    for(int page=0;page<10;page++)
+    {
+     type.GetField("selectedSettingsPage",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(plugin,page);
+     for(int f=0;f<2;f++){ImGui.NewFrame();Call("DrawSettingsWindow");ImGui.Render();frames++;}
+     if(ImGui.GetDrawData().TotalVtxCount==0)throw new Exception("Empty navigation page");
+     if(page is 2 or 9)Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"page-"+page+"-"+language+".bmp"));
+    }
+   }
    UiStub.Pvp=true;UiStub.Config.Language="ja";
    UiStub.Config.Support.Features=FeatureCatalog.All.Where(f=>f.Id!=78&&f.Id!=99).Select(f=>f.Id).ToHashSet();
    void Set(string field,object value)=>type.GetField(field,BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,value);
@@ -54,7 +65,7 @@ internal static unsafe class Program
    Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"support-hud-ja.bmp"));
    UiStub.Pvp=false;
    if(UiStub.Saves!=0)throw new Exception("Unchanged UI must not save");
-   Console.WriteLine($"PASS {frames+12} headless production UI frames; 8 categories in Japanese and English; zero unchanged config writes.");
+   Console.WriteLine($"PASS {frames+12} headless production UI frames; 8 categories and 10 sidebar pages in Japanese and English; zero unchanged config writes.");
   }
   ImGui.DestroyContext();foreach(var pin in UiStub.Pins)pin.Free();
  }

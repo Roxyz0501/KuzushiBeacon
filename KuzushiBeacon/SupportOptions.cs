@@ -20,7 +20,7 @@ public static class FeatureCatalog
         new(35,2,"崩しがすべて消えた通知","All Kuzushi ended"),new(36,2,"他の侍の崩しを区別","Distinguish other samurai Kuzushi"),
         new(37,2,"地天の残り時間","Chiten timer"),new(38,2,"地天終了後の崩し残存","Kuzushi remaining after Chiten"),
         new(39,2,"LB満タン通知","LB ready alert"),new(40,2,"LBと崩しが揃った通知","LB and Kuzushi opportunity"),
-        new(41,2,"斬鉄剣の推奨対象","Recommended Zantetsuken target"),new(42,2,"斬鉄剣の対象選択コマンド","Zantetsuken target-only command"),
+        new(41,2,"斬鉄剣の推奨対象","Recommended Zantetsuken target"),
         new(43,2,"斬鉄剣の最低人数条件","Minimum Zantetsuken coverage"),new(44,2,"斬鉄剣の要求状態","Zantetsuken request state"),
         new(45,2,"命中条件の目安","Estimated hit conditions"),
         new(46,3,"低HP警告","Low HP alert"),new(47,3,"HP急減警告","Rapid HP loss"),new(48,3,"低MP警告","Low MP alert"),
@@ -34,13 +34,13 @@ public static class FeatureCatalog
         new(63,4,"人数不利警告","Local disadvantage alert"),new(64,4,"最寄りの味方までの距離","Nearest ally distance"),
         new(65,4,"孤立警告","Isolation alert"),new(66,4,"味方集団の中心方向","Direction to ally centroid"),
         new(67,4,"指定した味方のマーカー","Tracked ally marker"),new(68,4,"追跡する味方との距離警告","Tracked ally separation"),
-        new(69,4,"低HPの味方を強調","Highlight low-HP allies"),new(70,4,"最低HP味方へのコマンド","Lowest-HP ally command"),
-        new(71,4,"味方への支援射程","Friendly target support range"),new(72,4,"味方の対象へ合わせるコマンド","Assist tracked ally command"),
+        new(69,4,"低HPの味方を強調","Highlight low-HP allies"),
+        new(71,4,"味方への支援射程","Friendly target support range"),
         new(73,4,"味方との対象一致人数","Allies sharing your target"),new(74,4,"味方に狙われている敵","Most focused enemy"),
         new(75,4,"退避方向の目安","Approximate retreat direction"),
         new(77,5,"コンテンツ別設定","Content-specific profiles"),new(78,5,"戦闘中だけ詳細表示","Detailed display only in combat"),
         new(79,5,"重要通知を優先","Prioritize critical alerts"),new(80,5,"通知の種類別SE","Per-category sounds"),
-        new(81,5,"一時ミュートコマンド","Temporary mute command"),new(82,5,"色と記号を併用","Colorblind symbols"),
+        new(82,5,"色と記号を併用","Colorblind symbols"),
         new(83,5,"画面外の追跡対象の方向","Offscreen tracked ally direction"),new(84,5,"重なる表示をずらす","Separate overlapping labels"),
         new(85,5,"遠い対象の表示を縮小","Scale distant labels"),
         new(86,6,"試合ごとのローカル記録","Local match summaries"),new(87,6,"LB満タンの保持時間","Time holding full LB"),
@@ -62,7 +62,7 @@ public static class FeatureCatalog
 
 public sealed class SupportOptions
 {
-    public HashSet<int> Features = [25,26,42,70,72,79,81,84,96,97,98];
+    public HashSet<int> Features = [25,26,79,84,96,97,98];
     public HashSet<int> DisabledGroups = [];
     public bool Notifications = true, Sound;
     public float Volume = .25f;
@@ -70,6 +70,7 @@ public sealed class SupportOptions
     public bool ExcludeGuard, ExcludeInvulnerable = true, ZantetsukenExcludeGuard, ZantetsukenExcludeInvulnerable = true;
     public float MeleeRange = 3, RangedRange = 20, AllyRange = 20, AreaRadius = 5, NearbyRange = 20;
     public float LowHpPercent = 30, LowMp = 2000, RapidLossPercent = 25, ExpiringSeconds = 1, StableSeconds = .5f;
+    public int MuteSeconds = 60;
     public int MinimumZantetsuken = 1, AlertCount = 3, FocusCount = 3, NearbyIncrease = 3, Disadvantage = 2;
     public int UpdateMs = 200, MaxActors = 200, MaxDraw = 30;
     public float BudgetMs = 2, StaleSeconds = .8f, Separation = 20, TextSize = 18;
@@ -91,12 +92,14 @@ public sealed class SupportOptions
         || On(87)||On(88)||On(89)||On(92)||On(93)||On(100);
     public static float JobRange(uint job, float melee, float ranged)
         => job is 1 or 2 or 3 or 4 or 19 or 20 or 21 or 22 or 29 or 30 or 32 or 34 or 37 or 39 or 41 ? melee : ranged;
+    public static float CommandRange(uint job,float requested,bool ally=false) => Math.Min(requested,ally?20:JobRange(job,3,20));
     public void Sanitize()
     {
         Features ??= []; DisabledGroups ??= [];
         Features.RemoveWhere(id => !FeatureCatalog.All.Any(f=>f.Id==id)); DisabledGroups.RemoveWhere(g=>g<0||g>7);
         float F(float v,float lo,float hi,float def) => float.IsFinite(v)?Math.Clamp(v,lo,hi):def;
-        MeleeRange=F(MeleeRange,1,50,3); RangedRange=F(RangedRange,1,50,20); AllyRange=F(AllyRange,1,50,20);
+        MeleeRange=F(MeleeRange,1,3,3); RangedRange=F(RangedRange,1,20,20); AllyRange=F(AllyRange,1,20,20);
+        MuteSeconds=Math.Clamp(MuteSeconds,1,3600);
         AreaRadius=F(AreaRadius,1,30,5); NearbyRange=F(NearbyRange,3,100,20); Separation=F(Separation,3,100,20);
         Volume=F(Volume,0,1,.25f); LowHpPercent=F(LowHpPercent,1,99,30); LowMp=F(LowMp,0,10000,2000);
         RapidLossPercent=F(RapidLossPercent,1,100,25); ExpiringSeconds=F(ExpiringSeconds,.1f,5,1);

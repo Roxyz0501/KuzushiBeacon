@@ -194,19 +194,23 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
 {
     var options=new SupportOptions();
     Check(!options.NeedsMonitor, "default support switches require no background scan");
+    Check(SupportOptions.CommandRange(34,20)==3 && SupportOptions.CommandRange(23,50)==20 && SupportOptions.CommandRange(34,2)==2,"command ranges respect job caps");
+    Check(SupportOptions.CommandRange(34,50,true)==20,"ally command range capped at 20m");
+    var oversized=new SupportOptions {MeleeRange=50,RangedRange=50,AllyRange=50};oversized.Sanitize();
+    Check(oversized.MeleeRange==3&&oversized.RangedRange==20&&oversized.AllyRange==20,"saved range caps");
     Check(SupportOptions.JobRange(34,3,20)==3 && SupportOptions.JobRange(41,3,20)==3 && SupportOptions.JobRange(19,3,20)==3,"melee and tanks use 3m");
     Check(SupportOptions.JobRange(23,3,20)==20 && SupportOptions.JobRange(24,3,20)==20 && SupportOptions.JobRange(42,3,20)==20,"ranged and healers use 20m");
     Check(FeatureCatalog.All.Select(f=>f.Id).Distinct().Count()==FeatureCatalog.All.Length,"unique feature switches");
-    foreach(var id in Enumerable.Range(16,60).Concat(Enumerable.Range(77,24)))
+    foreach(var id in Enumerable.Range(16,60).Concat(Enumerable.Range(77,24)).Where(id=>id is not (42 or 70 or 72 or 81)))
         Check(FeatureCatalog.All.Any(f=>f.Id==id),"requested feature has a switch: "+id);
     options.Features.Add(46);Check(options.NeedsMonitor,"survival feature requests monitoring");
     options.DisabledGroups.Add(3);Check(!options.On(46)&&!options.NeedsMonitor,"category disable stops its work");
     options.DisabledGroups.Clear();options.Features.Add(77);options.SmallFeatures=[];options.LargeFeatures=[46];
     Check(!options.On(46)&&options.On(46,true)&&!options.NeedsMonitor,"inactive profile does not scan");
     options.CurrentLarge=true;Check(options.NeedsMonitor&&options.On(46),"active profile enables monitoring and command conditions");
-    var config=new Configuration {LowHpRange=5};config.Sanitize();Check(config.Support.MeleeRange==5&&config.Support.RangedRange==20,"legacy range migration preserves custom melee range");
+    var config=new Configuration {LowHpRange=5};config.Sanitize();Check(config.Support.MeleeRange==3&&config.Support.RangedRange==20,"legacy range migration caps melee range");
     config.Support.Features.Add(99);var saved=JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(config))!;
-    Check(saved.Support.On(99)&&saved.Support.MeleeRange==5,"feature options persist");
+    Check(saved.Support.On(99)&&saved.Support.MeleeRange==3,"feature options persist");
     options.Volume=float.NaN;options.MaxActors=int.MaxValue;options.UpdateMs=-1;options.Sanitize();
     Check(options.Volume==.25f&&options.MaxActors==200&&options.UpdateMs==50,"invalid settings bounded");
     var latch=new AlertLatch();

@@ -1,3 +1,12 @@
+# 1.1.0.1 validation — 2026-10-19
+
+- 205 managed checks pass, including job/fixed command caps, oversized saved-range correction, and existing targeting/request gates.
+- 48 real-host lifecycle checks pass; no additional idle scans introduced.
+- 84 headless production UI frames pass: eight feature groups and ten sidebar pages in Japanese/English. Job settings and command-copy pages rendered; zero unchanged config writes. Common top-tab implementation unchanged.
+- Release build succeeds; no live-game or OS clipboard interaction validation. Copy uses ImGui SetClipboardText and does not dispatch a command.
+- Command-only feature flags 42/70/72/81 removed from the catalog and execution gates. Global enable, PvP/living-player gates, dry-run and request throttling retained; local mute remains usable outside PvP.
+- Enemy selection caps: melee/tank 3m, ranged/healer 20m; allies 20m. General targeting is not a guarantee that a particular action can hit. Zantetsuken retains native availability checks.
+
 # 1.1.0.0 expansion validation — 2026-10-19
 
 ## Executed
