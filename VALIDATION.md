@@ -1,5 +1,11 @@
 # Validation — 2026-10-19
 
+## 1.0.0.6 hotbar execution mode
+
+- Upstream ActionManager.UseActionMode.None (0) explicitly describes usual execution such as a hotbar press; Macro (2) suppresses queueing. Adapter now uses None for the single UseAction request.
+- Existing target selection, preflight checks and duplicate suppression remain. No synthetic UI click, custom packet or custom retry. Client's standard queue/check behavior is permitted; preflight checks may reject before reaching UseAction.
+- 85 managed and 34 host checks pass; Release zero warnings/errors. Native hotbar parity/queue timing remain unverified in game. Earlier sections describe their historical versions.
+
 ## 1.0.0.5 overhead maximum count
 
 - Gauge read uses host LimitBreakController IsPvP, CurrentUnits, BarUnits and BarCount; requires positive units/bars and current >= units * bars. No action execution is used to query readiness. Full gauge is distinct from temporary action lock.

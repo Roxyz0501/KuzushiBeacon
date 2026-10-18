@@ -54,8 +54,8 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
         var actor = Resolve(candidate);
         if (actor is null) return false;
         targets.Target = actor;
-        // Macro mode does not queue a later action. Normal client checks remain in effect.
+        // Same normal execution mode as a hotbar button press; client handles queueing/checks.
         return ActionManager.Instance()->UseAction(ActionType.Action, Zantetsuken.ActionId,
-            actor.GameObjectId, mode: ActionManager.UseActionMode.Macro);
+            actor.GameObjectId, mode: ActionManager.UseActionMode.None);
     }
 }
