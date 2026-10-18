@@ -1,5 +1,18 @@
 # Validation — 2026-10-19
 
+## 1.0.0.7 PvP Supporter rename, low-HP target, request latch and visible count
+
+- Display name is PvP Supporter; InternalName, existing repository/ZIP, config path and old commands are unchanged. New /pvpsupporter settings alias and /pvplowhp target-only command.
+- Low-HP command: user-selected default range 3m, configurable 1–50m; absolute current HP, hitbox-adjusted 3D distance, enemy player classification through native ClassifyTarget. Fresh maximum 200-player scan only on explicit invocation, no status reads or automatic attacks; revalidates identity/life/range before setter. Does not check walls or invulnerability.
+- 102 managed + 38 host checks pass. Added minimum HP, range boundary, friend/self/dead exclusion, ties, malformed coordinates, 200 cap, default range, command aliases and zero outside-PvP reads. Native classification/target selection and renamed installer flow remain unverified in game.
+
+
+- RequestGate is set before targeting/UseAction. Accepted calls, existing queue, changed action sequence or ambiguous exceptions remain latched until valid gauge depletion is observed. Confirmed rejection allows manual retry after 1s. Pending observation reads only gauge fields; no enemy scans or network hooks, stops on consumption/territory/logout/disposal, and also works with overlays disabled.
+- Plugin error chat/log messages share a 3s limiter. Existing command ingress debounce (250ms) remains. No global game-error suppression.
+- Count moved from background to foreground with dark backing and independent color/size/height/screen-Y settings plus settings-only live preview. Marker alpha and height can no longer hide the count inadvertently. PvP fullness compares CurrentUnits to one BarUnits instead of multiplying by BarCount; corroborated with upstream field declarations and a public PvP readiness implementation, not live memory observation.
+- Request-gate regression checks cover: pending latch beyond any timeout, continued full gauge, observed depletion, rejected-request delay, message window, config clamping/roundtrip and real Plugin command spam with zero outside-PvP object reads. Native acceptance, gate values and actual display remain unverified in game; no logged overlay exception explained the reported hidden number.
+- Canceled accepted queues with no LB consumption remain latched until territory/logout/reload; conservative handling avoids retransmitting an ambiguous request.
+
 ## 1.0.0.6 hotbar execution mode
 
 - Upstream ActionManager.UseActionMode.None (0) explicitly describes usual execution such as a hotbar press; Macro (2) suppresses queueing. Adapter now uses None for the single UseAction request.

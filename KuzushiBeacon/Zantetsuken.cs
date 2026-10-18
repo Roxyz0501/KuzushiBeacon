@@ -55,7 +55,7 @@ public static class Zantetsuken
     }
 
     public static bool FullGauge(bool pvp, int current, int barUnits, int bars)
-        => pvp && bars > 0 && barUnits > 0 && current >= (long)barUnits * bars;
+        => pvp && bars > 0 && barUnits > 0 && current >= barUnits;
 
     public static bool ShowCount(bool fullGauge, int count, double expiresAt, double now)
         => fullGauge && count > 0 && now < expiresAt;

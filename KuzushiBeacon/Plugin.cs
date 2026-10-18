@@ -11,6 +11,11 @@ namespace KuzushiBeacon;
 
 public sealed class Plugin : IDalamudPlugin
 {
+    private const string SettingsAlias = "/pvpsupporter";
+    private const string LowHpCommand = "/pvplowhp";
+    private readonly GameLowHpTarget lowHpTarget;
+    private readonly CommandInfo lowHpCommandInfo;
+    private double nextLowHpCommand;
     private const string ExecuteCommand = "/kuzushizantetsuken";
     private readonly ITargetManager targets;
     private readonly IChatGui chat;
@@ -19,6 +24,9 @@ public sealed class Plugin : IDalamudPlugin
     private int maximumCount;
     private double countExpiresAt;
     private double nextCommand;
+    private bool observingRequest;
+    private bool previewCount;
+    private readonly RequestGate messages = new();
     private const string Command = "/kuzushibeacon";
     private readonly IDalamudPluginInterface pi;
     private readonly IClientState client;
@@ -57,6 +65,7 @@ public sealed class Plugin : IDalamudPlugin
         this.gui = gui;
         this.commands = commands;
         this.log = log;
+        lowHpTarget = new GameLowHpTarget(client, objects, targets);
         world = new DalamudWorld(objects);
         zantetsukenAction = new GameZantetsukenAction(client, objects, targets, world);
         config = pi.GetPluginConfig() as Configuration ?? new Configuration();
@@ -67,6 +76,9 @@ public sealed class Plugin : IDalamudPlugin
         if (config.InitializeLanguage(game, pi.UiLanguage)) pi.SavePluginConfig(config);
         commandInfo = new CommandInfo((_, _) => Open()) { HelpMessage = T("CommandHelp") };
         commands.AddHandler(Command, commandInfo);
+        commands.AddHandler(SettingsAlias, commandInfo);
+        lowHpCommandInfo = new CommandInfo((command, args) => { if (string.IsNullOrWhiteSpace(args)) _ = SelectLowHpAsync(); }) { HelpMessage = T("LowHpHelp") };
+        commands.AddHandler(LowHpCommand, lowHpCommandInfo);
         executeCommandInfo = new CommandInfo((_, args) => { if (string.IsNullOrWhiteSpace(args)) ExecuteZantetsuken(); }) { HelpMessage = T("ExecuteHelp") };
         commands.AddHandler(ExecuteCommand, executeCommandInfo);
         client.TerritoryChanged += TerritoryChanged;
@@ -80,6 +92,21 @@ public sealed class Plugin : IDalamudPlugin
         Reconcile();
     }
 
+    private async Task SelectLowHpAsync()
+    {
+        var requested = Now;
+        try
+        {
+            await framework.RunOnFrameworkThread(() =>
+            {
+                if (disposed || Now - requested > 0.5 || Now < nextLowHpCommand) return;
+                nextLowHpCommand = Now + 0.25;
+                if (!lowHpTarget.Select(config.LowHpRange) && messages.Message(Now)) chat.Print(T("LowHpUnavailable"));
+            });
+        }
+        catch (Exception ex) { if (messages.Message(Now)) log.Error(ex, "Lowest-HP target selection failed."); }
+    }
+
     private void ExecuteZantetsuken() => _ = ExecuteZantetsukenAsync();
 
     private async Task ExecuteZantetsukenAsync()
@@ -89,20 +116,52 @@ public sealed class Plugin : IDalamudPlugin
         {
             await framework.RunOnFrameworkThread(() =>
             {
-                if (disposed || Now - requestedAt > 0.5 || Now < nextCommand) return;
+                if (disposed || Now - requestedAt > 0.5 || Now < nextCommand || zantetsukenAction.Gate.Pending) return;
                 nextCommand = Now + 0.25;
-                if (!client.IsLoggedIn || !client.IsPvPExcludingDen) { chat.Print(T("ExecuteUnavailable")); return; }
+                if (!client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable(); return; }
                 var player = objects.LocalPlayer;
                 if (player is null || !player.IsValid() || player.IsDead || player.ClassJob.RowId != Rules.SamuraiJob)
-                { chat.Print(T("ExecuteUnavailable")); return; }
-                if (!Zantetsuken.Execute(true, player.EntityId, player.Position, targets.Target?.GameObjectId ?? 0,
-                    world, zantetsukenAction)) chat.Print(T("ExecuteUnavailable"));
+                { CommandUnavailable(); return; }
+                try
+                {
+                    if (!Zantetsuken.Execute(true, player.EntityId, player.Position, targets.Target?.GameObjectId ?? 0,
+                        world, zantetsukenAction)) CommandUnavailable();
+                }
+                finally
+                {
+                    if (zantetsukenAction.Gate.Pending && !observingRequest)
+                    { framework.Update += ObserveRequest; observingRequest = true; }
+                }
             });
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Zantetsuken command failed; no retry will be attempted.");
+            if (messages.Message(Now)) log.Error(ex, "Zantetsuken command failed; no retry will be attempted.");
         }
+    }
+
+    private void CommandUnavailable()
+    {
+        if (messages.Message(Now)) chat.Print(T("ExecuteUnavailable"));
+    }
+
+    private void ObserveRequest(IFramework _)
+    {
+        try
+        {
+            if (!client.IsLoggedIn || !client.IsPvPExcludingDen) zantetsukenAction.Gate.Reset();
+            else if (GameZantetsukenAction.TryReadGauge(out var full)) zantetsukenAction.Gate.Observe(full);
+        }
+        catch (Exception ex) { if (messages.Message(Now)) log.Error(ex, "Could not observe pending LB request; retry remains blocked."); }
+        if (!zantetsukenAction.Gate.Pending && observingRequest)
+        { framework.Update -= ObserveRequest; observingRequest = false; }
+    }
+
+    private void ResetRequest()
+    {
+        zantetsukenAction.Gate.Reset();
+        if (observingRequest) framework.Update -= ObserveRequest;
+        observingRequest = false;
     }
 
     private string T(string key) => Loc.Get(config.Language, key);
@@ -157,9 +216,9 @@ public sealed class Plugin : IDalamudPlugin
         trackedOwner = 0;
     }
 
-    private void TerritoryChanged(uint _) { Stop(); Reconcile(); }
+    private void TerritoryChanged(uint _) { ResetRequest(); Stop(); Reconcile(); }
     private void JobChanged(uint _) { Stop(); Reconcile(); }
-    private void Logout(int _, int __) => Stop();
+    private void Logout(int _, int __) { ResetRequest(); Stop(); }
 
     private void Fail(Exception ex)
     {
@@ -220,16 +279,8 @@ public sealed class Plugin : IDalamudPlugin
             var draw = ImGui.GetBackgroundDrawList();
             if (config.ShowMaxCount && maximumCount > 0
                 && Zantetsuken.ShowCount(GameZantetsukenAction.IsLimitBreakFull(), maximumCount, countExpiresAt, now)
-                && Project(player.Position + Vector3.UnitY * config.MarkerHeight, out var countHead))
-            {
-                var text = maximumCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                var font = ImGui.GetFont();
-                var size = ImGui.GetFontSize() * 1.5f;
-                var width = ImGui.CalcTextSize(text).X * 1.5f;
-                var position = countHead - new Vector2(width * 0.5f, size);
-                draw.AddText(font, size, position + Vector2.One, 0xFF000000, text);
-                draw.AddText(font, size, position, ImGui.ColorConvertFloat4ToU32(config.MarkerColor), text);
-            }
+                && Project(player.Position + Vector3.UnitY * config.CountHeight, out var countHead))
+                DrawCount(ImGui.GetForegroundDrawList(), countHead + new Vector2(0, config.CountOffsetY), maximumCount);
             var lineColor = ImGui.ColorConvertFloat4ToU32(config.LineColor);
             var markerColor = ImGui.ColorConvertFloat4ToU32(config.MarkerColor);
             Vector2 from = default;
@@ -258,6 +309,16 @@ public sealed class Plugin : IDalamudPlugin
             }
         }
         catch (Exception ex) { Fail(ex); }
+    }
+
+    private void DrawCount(ImDrawListPtr draw, Vector2 anchor, int count)
+    {
+        var text = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var scale = config.CountSize / ImGui.GetFontSize();
+        var size = ImGui.CalcTextSize(text) * scale;
+        var position = anchor - new Vector2(size.X * 0.5f, size.Y);
+        draw.AddRectFilled(position - new Vector2(5, 3), position + size + new Vector2(5, 3), 0xB0000000, 4);
+        draw.AddText(ImGui.GetFont(), config.CountSize, position, ImGui.ColorConvertFloat4ToU32(config.CountColor), text);
     }
 
     private bool Project(Vector3 position, out Vector2 screen)
@@ -301,7 +362,7 @@ public sealed class Plugin : IDalamudPlugin
         using var font = fonts!.Push(config.Language);
         ImGui.SetNextWindowSize(new Vector2(680, 650), ImGuiCond.FirstUseEver);
         ImGui.SetNextWindowSizeConstraints(new Vector2(470, 350), new Vector2(float.MaxValue));
-        if (ImGui.Begin("Kuzushi Beacon###KuzushiBeacon", ref open))
+        if (ImGui.Begin("PvP Supporter###KuzushiBeacon", ref open))
         {
             if (ImGui.BeginTabBar("KuzushiBeaconTabs"))
             {
@@ -319,6 +380,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         ImGui.TextWrapped(T("Explanation"));
         ImGui.TextWrapped(T("ExecuteHelp"));
+        ImGui.TextWrapped(T("LowHpHelp"));
         ImGui.TextWrapped(T(faulted ? "Faulted" : subscribed ? "Active" : "Idle"));
         ImGui.TextWrapped(T("DetectionMetrics"));
         ImGui.TextWrapped(string.Format(T("DetectionMetricsValue"), tracker.ScanCount, tracker.CandidateReads,
@@ -331,12 +393,25 @@ public sealed class Plugin : IDalamudPlugin
             faulted = false;
             changed = true;
         }
+        changed |= ImGui.SliderFloat(Control("LowHpRange"), ref config.LowHpRange, 1, 50, "%.1f m");
         ImGui.Separator();
         changed |= ImGui.Checkbox(Label("ShowLine"), ref config.ShowLine);
         changed |= ImGui.ColorEdit4(Control("LineColor"), ref config.LineColor, ImGuiColorEditFlags.AlphaBar);
         changed |= ImGui.SliderFloat(Control("LineWidth"), ref config.LineWidth, 0.5f, 5f, "%.1f px");
         ImGui.Separator();
         changed |= ImGui.Checkbox(Label("ShowMaxCount"), ref config.ShowMaxCount);
+        changed |= ImGui.ColorEdit4(Control("CountColor"), ref config.CountColor, ImGuiColorEditFlags.AlphaBar);
+        changed |= ImGui.SliderFloat(Control("CountSize"), ref config.CountSize, 12, 96, "%.0f px");
+        changed |= ImGui.SliderFloat(Control("CountHeight"), ref config.CountHeight, 0, 6, "%.1f m");
+        changed |= ImGui.SliderFloat(Control("CountOffset"), ref config.CountOffsetY, -300, 300, "%.0f px");
+        ImGui.Checkbox(Label("CountPreview"), ref previewCount);
+        if (previewCount)
+        {
+            var player = objects.LocalPlayer;
+            if (player is not null && player.IsValid() && Project(player.Position + Vector3.UnitY * config.CountHeight, out var head))
+                DrawCount(ImGui.GetForegroundDrawList(), head + new Vector2(0, config.CountOffsetY), 3);
+        }
+        ImGui.Separator();
         changed |= ImGui.Checkbox(Label("ShowMarker"), ref config.ShowMarker);
         changed |= ImGui.ColorEdit4(Control("MarkerColor"), ref config.MarkerColor, ImGuiColorEditFlags.AlphaBar);
         changed |= ImGui.SliderFloat(Control("MarkerSize"), ref config.MarkerSize, 5f, 30f, "%.0f px");
@@ -357,6 +432,7 @@ public sealed class Plugin : IDalamudPlugin
         var from = start + new Vector2(30, 55);
         var to = start + new Vector2(width - 40, 55);
         draw.AddCircleFilled(from, 5, 0xFFDDDDDD);
+        if (config.ShowMaxCount) DrawCount(draw, from - new Vector2(0, 10), 3);
         draw.AddCircleFilled(to, 5, 0xFFDDDDDD);
         if (config.ShowLine) draw.AddLine(from, to, ImGui.ColorConvertFloat4ToU32(config.LineColor), config.LineWidth);
         if (config.ShowMarker) DrawMarker(draw, to - new Vector2(0, 8), Math.Min(22, config.MarkerSize),
@@ -372,6 +448,7 @@ public sealed class Plugin : IDalamudPlugin
         config.Language = code;
         commandInfo.HelpMessage = T("CommandHelp");
         executeCommandInfo.HelpMessage = T("ExecuteHelp");
+        lowHpCommandInfo.HelpMessage = T("LowHpHelp");
         dirty = true;
         Save();
     }
@@ -382,6 +459,7 @@ public sealed class Plugin : IDalamudPlugin
     public void Dispose()
     {
         disposed = true;
+        ResetRequest();
         Stop();
         client.TerritoryChanged -= TerritoryChanged;
         client.ClassJobChanged -= JobChanged;
@@ -393,6 +471,8 @@ public sealed class Plugin : IDalamudPlugin
         pi.UiBuilder.OpenMainUi -= Open;
         pi.UiBuilder.Draw -= DrawSettingsWindow;
         commands.RemoveHandler(Command);
+        commands.RemoveHandler(SettingsAlias);
+        commands.RemoveHandler(LowHpCommand);
         commands.RemoveHandler(ExecuteCommand);
         Save();
         fonts?.Dispose();

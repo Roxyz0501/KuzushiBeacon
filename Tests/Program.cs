@@ -138,6 +138,7 @@ Check(cfg.LineWidth == 1.5f && cfg.MarkerSize == 30 && cfg.LineColor == new Vect
     Zantetsuken.Execute(true, 10, Vector3.Zero, 0, w, action);
     Check(w.StatusReads - reads == 200 && action.Checks - evaluations == 200, "command scan and native availability checks bounded to 200");
 }
+Check(Zantetsuken.FullGauge(true, 10000, 10000, 3), "PvP requires one full personal bar, not all displayed bars");
 Check(Zantetsuken.FullGauge(true, 10000, 10000, 1), "PvP full gauge");
 Check(!Zantetsuken.FullGauge(true, 9999, 10000, 1), "partial gauge hidden");
 Check(!Zantetsuken.FullGauge(false, 10000, 10000, 1), "PvE gauge hidden");
@@ -156,6 +157,38 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     Check(selection.Count == 3 && selection.Target?.Index == 1, "head count includes center and maximum additional targets");
     Check(action.Attempts == 0, "count-only computation never executes action");
     Check(Zantetsuken.FindBest(actors, Vector3.Zero, 0, _ => false).Count == 0, "unreachable centers produce no count");
+}
+{
+    var gate = new RequestGate();
+    Check(gate.Begin(0), "first request accepted by gate");
+    Check(!gate.Begin(0.3) && !gate.Begin(1000), "issued request never resends on a timer");
+    gate.Observe(true);
+    Check(!gate.Begin(1001), "full LB keeps pending request latched");
+    gate.Observe(false);
+    Check(gate.Begin(1002), "observed consumption releases request latch");
+    gate.Rejected(1002);
+    Check(!gate.Begin(1002.5) && gate.Begin(1003), "confirmed rejection has retry backoff");
+    Check(gate.Message(0) && !gate.Message(0.5) && !gate.Message(2.99) && gate.Message(3), "errors limited to one per three seconds");
+    gate.Reset();
+    Check(gate.Begin(1004), "territory/logout reset clears latch");
+    var countConfig = new Configuration { CountSize = float.NaN, CountHeight = 99, CountOffsetY = -999 };
+    countConfig.Sanitize();
+    Check(countConfig.CountSize == 32 && countConfig.CountHeight == 6 && countConfig.CountOffsetY == -300, "number settings clamped independently");
+    var roundtrip = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(countConfig))!;
+    Check(roundtrip.CountSize == countConfig.CountSize && roundtrip.CountOffsetY == countConfig.CountOffsetY, "number settings persist");
+}
+{
+    HpCandidate C(int id, uint hp, float x, bool enemy = true) => new(new Actor(id, (uint)id, (ulong)id,
+        new Vector3(x, 0, 0), true, true), hp, 0.5f, enemy);
+    var candidates = new[] { C(2, 1000, 3), C(3, 500, 4), C(4, 1, 5), C(5, 1, 1, false) };
+    Check(LowHpTarget.Find(candidates, 1, Vector3.Zero, 0.5f, 3)?.Actor.EntityId == 3, "lowest absolute HP within hitbox range, enemies only");
+    Check(LowHpTarget.Find(new[] { C(2, 0, 1), C(1, 1, 1) }, 1, Vector3.Zero, 0.5f, 3) is null, "dead HP and self excluded");
+    Check(LowHpTarget.Find(new[] { C(3, 500, 3), C(2, 500, 2) }, 1, Vector3.Zero, 0, 3)?.Actor.EntityId == 2, "HP tie chooses nearest");
+    Check(!LowHpTarget.InRange(Vector3.Zero, 0.5f, new Vector3(4.01f, 0, 0), 0.5f, 3), "outside hitbox range excluded");
+    Check(!LowHpTarget.InRange(Vector3.Zero, 0.5f, new Vector3(float.NaN, 0, 0), 0.5f, 3), "invalid positions excluded");
+    Check(new Configuration().LowHpRange == 3, "user selected default 3m");
+    var bounded = Enumerable.Range(2, 201).Select(i => C(i, i == 202 ? 1u : 100u, 1));
+    Check(LowHpTarget.Find(bounded, 1, Vector3.Zero, 0, 3)?.Actor.EntityId == 2, "low HP enumeration capped at 200");
 }
 Console.WriteLine($"PASS {checks} checks; localization complete for {Loc.Languages.Length} languages.");
 

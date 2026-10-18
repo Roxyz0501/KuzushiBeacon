@@ -1,15 +1,20 @@
 {
   "Author": "Roxyz0501",
-  "Name": "Kuzushi Beacon",
+  "Name": "PvP Supporter",
   "InternalName": "KuzushiBeacon",
-  "Punchline": "自分が付与した崩しを線と頭上マーカーで表示。",
-  "Description": "PvPコンテンツ内で侍が使用している間、自分が付与した崩しの対象をローカル表示します。線・頭上マーカーの個別切替と色・サイズを設定できます。通常エリアでは監視を停止します。/kuzushibeacon で設定を開きます。",
+  "Punchline": "PvPの崩し表示・斬鉄剣支援・最低HPターゲット。",
+  "Description": "PvP専用サポート。自分の崩しを線・マーカーと最大人数で表示し、斬鉄剣の最適対象選択と射程内の最低HPターゲットをコマンドで利用できます。/pvpsupporter で設定。旧名Kuzushi Beaconの設定・コマンドを引き継ぎます。",
   "DalamudApiLevel": 15,
   "ApplicableVersion": "any",
-  "AssemblyVersion": "1.0.0.6",
+  "AssemblyVersion": "1.0.0.7",
   "RepoUrl": "https://github.com/Roxyz0501/KuzushiBeacon",
   "IconUrl": "https://raw.githubusercontent.com/Roxyz0501/KuzushiBeacon/main/KuzushiBeacon/images/icon.png",
-  "Tags": ["pvp", "samurai", "kuzushi", "overlay"],
+  "Tags": [
+    "pvp",
+    "samurai",
+    "kuzushi",
+    "overlay"
+  ],
   "LoadRequiredState": 0,
   "CanUnloadAsync": false
 }

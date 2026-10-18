@@ -9,9 +9,14 @@ public sealed class Configuration : IPluginConfiguration
     public int Version { get; set; } = 1;
     public string? Language { get; set; }
     public bool Enabled = true;
+    public float LowHpRange = 3f;
     public bool ShowLine = true;
     public bool ShowMarker = true;
     public bool ShowMaxCount = true;
+    public Vector4 CountColor = new(1f, 0.9f, 0.2f, 1f);
+    public float CountSize = 32f;
+    public float CountHeight = 2.5f;
+    public float CountOffsetY = -25f;
     public Vector4 LineColor = new(1f, 0.32f, 0.12f, 0.85f);
     public Vector4 MarkerColor = new(1f, 0.75f, 0.12f, 1f);
     public float LineWidth = 1.5f;
@@ -31,6 +36,11 @@ public sealed class Configuration : IPluginConfiguration
 
     public void Sanitize()
     {
+        LowHpRange = Clamp(LowHpRange, 1, 50, 3);
+        CountColor = Color(CountColor);
+        CountSize = Clamp(CountSize, 12, 96, 32);
+        CountHeight = Clamp(CountHeight, 0, 6, 2.5f);
+        CountOffsetY = Clamp(CountOffsetY, -300, 300, -25);
         LineWidth = Clamp(LineWidth, 0.5f, 5f, 1.5f);
         MarkerSize = Clamp(MarkerSize, 5f, 30f, 12f);
         MarkerHeight = Clamp(MarkerHeight, 1f, 5f, 2.5f);

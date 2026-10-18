@@ -93,6 +93,25 @@ foreach (var pvp in new[] { false, true })
     plugin.Dispose();
     Check(host.Commands.Count == 0, "dispose removes both command handlers");
 }
+{
+    var host = new Host { Pvp = false };
+    using var plugin = host.Load();
+    for (int i = 0; i < 20; i++)
+    {
+        typeof(Plugin).GetField("nextCommand", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(plugin, 0d);
+        host.Commands["/kuzushizantetsuken"].Handler("/kuzushizantetsuken", "");
+    }
+    Check(host.ChatMessages == 1, "real command suppresses repeated unavailable messages");
+    Check(host.ObjectReads == 0, "unavailable command spam never scans objects");
+}
+{
+    var host = new Host { Pvp = false };
+    using var plugin = host.Load();
+    Check(host.Commands.ContainsKey("/pvplowhp") && host.Commands.ContainsKey("/pvpsupporter")
+        && host.Commands.ContainsKey("/kuzushibeacon"), "new commands and compatible settings alias registered");
+    host.Commands["/pvplowhp"].Handler("/pvplowhp", "");
+    Check(host.ObjectReads == 0 && host.PlayerEnumerations == 0, "low HP command outside PvP has no object reads");
+}
 Console.WriteLine($"PASS {checks} host lifecycle checks (real Plugin + thread-enforcing service doubles).");
 
 sealed class Host
@@ -112,6 +131,7 @@ sealed class Host
     public int ObjectReads;
     public int IllegalReads;
     public int Errors;
+    public int ChatMessages;
     public IFramework Framework { get; }
     public Host() => Framework = Stub<IFramework>("framework");
     public Plugin Load() => new(Stub<IDalamudPluginInterface>("pi"), Stub<IClientState>("client"),
@@ -152,6 +172,7 @@ sealed class Host
         }
         switch (name)
         {
+            case "Print": ChatMessages++; return null;
             case "AddHandler": Commands.Add((string)args[0]!, (CommandInfo)args[1]!); return true;
             case "RemoveHandler": return Commands.Remove((string)args[0]!);
             case "GetPluginConfig": return new Configuration { Language = "ja" };
