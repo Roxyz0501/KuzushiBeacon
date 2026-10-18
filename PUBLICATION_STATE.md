@@ -1,5 +1,16 @@
 # Publication state
 
+## 2026-10-18 — Kuzushi Beacon 1.0.0.3 monitoring recovery fix
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.3
+- ZIP: https://github.com/Roxyz0501/KuzushiBeacon/releases/download/v1.0.0.3/KuzushiBeacon-1.0.0.3.zip
+- Source/tag: 7634ddd9f972642daa8c0018c574b8c44f6950a1. ZIP: 57,295 bytes; SHA-256 2F8331C19C18B5F96628B17A3D3C62B5F2B379008E637E08A8C085374924A323. Anonymous download hash matches; six entries and manifest 1.0.0.3 verified. Public repository HTTP 200 and icon image/png.
+- Shared index: a01264b1201e2b001a923ca1825b7a8567a20d29. Connector and anonymous commit-pinned index verified; other ten entries unchanged. Normal raw main URL initially cached 1.0.0.2.
+- Confirmed/reproduced defect: temporary LocalPlayer absence prevented subscription or permanently stopped it. PvP lifecycle and player/job scan eligibility are now separate, allowing recovery without another event. No enemy/status reads while unavailable or on another job; no update/draw subscriptions outside PvP.
+- 64 managed + 31 real-Plugin host checks pass; Release build zero warnings/errors. Old implementation failed the new entry-with-missing-player test. Live detection and attribution of the exact reported in-game failure remain unverified.
+- No packet generation/transmission/modification, network hooks or game writes/actions. Installed files were not changed locally; public release and shared index are updated.
+
+
 ## 2026-10-18 — 1.0.0.2 diagnostic release published
 
 - Version 1.0.0.2 adds detection/source/duration/render diagnostics. No confirmed detection fix is claimed.
