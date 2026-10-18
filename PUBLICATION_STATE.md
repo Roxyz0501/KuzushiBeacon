@@ -1,5 +1,17 @@
 # Publication state
 
+## 2026-10-19 — PvP Supporter 1.0.0.7 (formerly Kuzushi Beacon)
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.7
+- ZIP: https://github.com/Roxyz0501/KuzushiBeacon/releases/download/v1.0.0.7/KuzushiBeacon-1.0.0.7.zip
+- Source/tag: affd2bf019d00af01a542e2ef0e0ee8a57bd8e6f. ZIP: 68,469 bytes; SHA-256 92DDA1416B5FBDA1C7896E331D7A65F4DA637A3B846506136F6E09617B6F7518. Anonymous hash and six-entry manifest verified, display name PvP Supporter and InternalName KuzushiBeacon retained. Repository HTTP 200; icon image/png.
+- Shared index: 85ada506c9c942c9ef45e95598a6f4573a71f20f. Connector and anonymous commit-pinned URL verified; other ten entries unchanged. Normal main URL initially cached old name/1.0.0.6.
+- Added /pvpsupporter settings alias and /pvplowhp enemy-player targeting by minimum absolute current HP, user-selected default 3m (configurable 1-50m). Explicit bounded scan, no attacks or extra idle polling. Old commands/config/repository/package identity preserved.
+- Added request latch until observed LB consumption (including accepted/queued/sequence-change/ambiguous requests), 1s confirmed-rejection backoff and shared 3s chat/log limiter. Pending observer reads gauge only; does not resend requests. Canceled accepted request with no depletion remains latched until territory/logout/reload.
+- Count foreground rendering with backing, independent color/size/height/Y-offset and settings-only overhead preview. PvP fullness compares one personal bar. Exact cause of the user's invisible number remains unconfirmed in game.
+- 102 managed + 38 host checks pass, Release zero warnings/errors; 711 source-string characters verified in four regional host font faces. Native targeting/requests/gauge and game rendering remain unverified. No unpublished installed files were overwritten.
+
+
 ## 2026-10-19 — Kuzushi Beacon 1.0.0.6 normal hotbar execution mode
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.6
