@@ -31,6 +31,9 @@ public sealed class Plugin : IDalamudPlugin
     private bool faulted;
     private double saveAfter;
     private uint trackedOwner;
+    private long drawnLines;
+    private long drawnMarkers;
+    private long projectionFailures;
     private static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
     public Plugin(IDalamudPluginInterface pi, IClientState client, IObjectTable objects,
@@ -155,6 +158,7 @@ public sealed class Plugin : IDalamudPlugin
             var markerColor = ImGui.ColorConvertFloat4ToU32(config.MarkerColor);
             Vector2 from = default;
             bool fromVisible = config.ShowLine && Project(player.Position + Vector3.UnitY * 0.8f, out from);
+            if (config.ShowLine && !fromVisible) projectionFailures++;
             foreach (var target in tracker.Targets)
             {
                 if (now >= target.ExpiresAt) continue;
@@ -164,9 +168,17 @@ public sealed class Plugin : IDalamudPlugin
                 var position = actor.Position;
                 if (Vector3.DistanceSquared(position, player.Position) > config.MaxDistance * config.MaxDistance) continue;
                 if (fromVisible && Project(position + Vector3.UnitY * 0.8f, out var to))
+                {
                     draw.AddLine(from, to, lineColor, config.LineWidth);
+                    drawnLines++;
+                }
+                else if (fromVisible) projectionFailures++;
                 if (config.ShowMarker && Project(position + Vector3.UnitY * config.MarkerHeight, out var head))
+                {
                     DrawMarker(draw, head, config.MarkerSize, markerColor, config.MarkerColor.W);
+                    drawnMarkers++;
+                }
+                else if (config.ShowMarker) projectionFailures++;
             }
         }
         catch (Exception ex) { Fail(ex); }
@@ -231,6 +243,11 @@ public sealed class Plugin : IDalamudPlugin
     {
         ImGui.TextWrapped(T("Explanation"));
         ImGui.TextWrapped(T(faulted ? "Faulted" : subscribed ? "Active" : "Idle"));
+        ImGui.TextWrapped(T("DetectionMetrics"));
+        ImGui.TextWrapped(string.Format(T("DetectionMetricsValue"), tracker.ScanCount, tracker.CandidateReads,
+            tracker.StatusListReads, tracker.Targets.Count, drawnLines, drawnMarkers, projectionFailures));
+        ImGui.TextWrapped(string.Format(T("StatusDiagnostics"), world.KuzushiSeen,
+            world.OwnSourceSeen, world.InvalidOwnDurationSeen));
         bool changed = false;
         if (ImGui.Checkbox(Label("Enabled"), ref config.Enabled))
         {

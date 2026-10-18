@@ -1,5 +1,14 @@
 # Validation — 2026-10-18
 
+## 1.0.0.2 diagnostic release
+
+- Local game data confirms Status 3202 is Kuzushi. This does not establish the cause of the reported detection failure.
+- Added cumulative detection, source-match, invalid-duration, draw-request and projection counters. Uses the existing status iteration; no extra scan, network, persistence or game action. Counters include repeat observations.
+- Preserved original selection logic. An unverified additional Hostile filter was removed before publication; no detection fix is claimed.
+- 64 managed checks and 25 real-Plugin host lifecycle checks pass. Diagnostic counters are not covered by these existing tests; live verification remains pending.
+- Package uses six explicit entries and a UTF-8 manifest; Windows PowerShell 5.1 compression assemblies are loaded explicitly.
+
+
 ## 1.0.0.1 installation fix
 
 - User's Dalamud log confirmed `InvalidOperationException: Not on main thread!` from `ObjectTable.LocalPlayer` during the 1.0.0.0 constructor. Download/extraction succeeded; plugin construction failed and the installer subsequently removed the DLL.

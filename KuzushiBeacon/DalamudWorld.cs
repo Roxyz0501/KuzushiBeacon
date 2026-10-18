@@ -6,6 +6,9 @@ namespace KuzushiBeacon;
 
 internal sealed class DalamudWorld(IObjectTable objects) : IHighlightWorld
 {
+    public long KuzushiSeen { get; private set; }
+    public long OwnSourceSeen { get; private set; }
+    public long InvalidOwnDurationSeen { get; private set; }
     public IEnumerable<Actor> Players
     {
         get
@@ -24,8 +27,20 @@ internal sealed class DalamudWorld(IObjectTable objects) : IHighlightWorld
         if (objects[index] is not IBattleChara actor) return 0;
         float remaining = 0;
         foreach (var status in actor.StatusList)
+        {
+            if (status.StatusId == Rules.KuzushiStatus)
+            {
+                KuzushiSeen++;
+                if (status.SourceId == sourceId)
+                {
+                    OwnSourceSeen++;
+                    if (!float.IsFinite(status.RemainingTime) || status.RemainingTime <= 0)
+                        InvalidOwnDurationSeen++;
+                }
+            }
             if (Rules.OwnStatus(status.StatusId, status.SourceId, sourceId, status.RemainingTime))
                 remaining = Math.Max(remaining, status.RemainingTime);
+        }
         return remaining;
     }
 }

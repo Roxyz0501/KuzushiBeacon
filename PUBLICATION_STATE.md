@@ -1,5 +1,13 @@
 # Publication state
 
+## 2026-10-18 — 1.0.0.2 diagnostic release preparation
+
+- Version 1.0.0.2 adds detection/source/duration/render diagnostics. No confirmed detection fix is claimed.
+- Original target matching retained; no unverified Hostile gate.
+- Installed plugin files have not been changed. Publish the release ZIP and shared repository index before considering distribution complete.
+- Publication verification pending.
+
+
 ## 2026-10-18 — Kuzushi Beacon 1.0.0.1 installation fix
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.1
