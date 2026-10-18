@@ -1,5 +1,16 @@
 # Publication state
 
+## 2026-10-19 — Kuzushi Beacon 1.0.0.4 explicit Zantetsuken command
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.4
+- ZIP: https://github.com/Roxyz0501/KuzushiBeacon/releases/download/v1.0.0.4/KuzushiBeacon-1.0.0.4.zip
+- Source/tag: 478d1b417e8dc30894fa5eccb65a0f64b488bb3f. ZIP: 61,301 bytes; SHA-256 41882F742B1D69CE6BB44F1CA94D710A3621411939E68F950658E51BA2C58807. Anonymous download matches; six entries/manifest verified. Repository HTTP 200; icon image/png.
+- Shared index: 585e4eba2caa6e810deaa0e28073d83919ce5874; connector and anonymous commit-pinned index verified; other ten entries unchanged. Normal raw main URL initially cached 1.0.0.3.
+- /kuzushizantetsuken freshly ranks own-Kuzushi targets by target-centered 5m coverage, chooses a usable target, sets target and invokes normal client UseAction once in Macro mode. Explicit commands only, PvP/live SAM gate, 250ms duplicate suppression, no retries or queued action. Coverage is a center-distance estimate, not guaranteed server hits.
+- 74 managed + 34 host checks pass; Release zero warnings/errors. 667 source-string characters covered in four regional host font faces. Native action execution and live macro acceptance remain unverified.
+- Corrected project and workspace instructions at user request: do not send improper packets, not a blanket prohibition on targeting/actions. No custom packet generation/transmission, hooks or cooldown/resource writes were added. Installed plugin files were not replaced locally.
+
+
 ## 2026-10-18 — Kuzushi Beacon 1.0.0.3 monitoring recovery fix
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.3
