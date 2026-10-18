@@ -1,3 +1,11 @@
+# 1.1.0.3 hierarchy validation — 2026-10-19
+
+- 307 managed checks: hierarchy gates, timer-only expiry color, LB-only display condition, shared LB alert independent from Samurai parents, duplicate alert migration in all profiles, migration of disabled legacy Samurai category.
+- 59 host checks: parent-off stops monitoring while retaining child selections; re-enabling restores it; disabled Zantetsuken support rejects the command before native/object access.
+- 473 production UI frames: on/off groups, all 80 feature tooltips in Japanese/English, sidebar pages, real ImGui profile toggle; zero unchanged config writes, four font faces checked. Hierarchical Samurai screenshot inspected.
+- Same status exclusion predicate feeds recommendation/count candidates, timer/other-Samurai labels and cached legacy marker/line eligibility; no per-frame status rescan added. LB geometry remains full-gauge-only.
+- Color widgets use NoInputs with read-only RGB. Parent common tabs unchanged. Live-game drawing, audio and action success remain unverified.
+
 # 1.1.0.2 settings audit — 2026-10-19
 
 Full inventory and concrete consumers: SETTING_AUDIT.md. No claim of live-game validation.

@@ -68,7 +68,7 @@ public sealed partial class Plugin
         if(reviewStarted==null&&On(86)&&duty.IsDutyStarted&&!reviewCompleted)reviewStarted=DateTimeOffset.UtcNow;
         var elapsed=lastSupportTime==0?0:Math.Clamp(now-lastSupportTime,0,1);
         lastSupportTime=now;
-        var legacy=!S.DisabledGroups.Contains(2)&&player.ClassJob.RowId==Rules.SamuraiJob&&(config.ShowLine||config.ShowMarker||config.ShowMaxCount);
+        var legacy=player.ClassJob.RowId==Rules.SamuraiJob&&(OwnHighlightsEnabled||CountHighlightEnabled);
         nextSupport=now+S.SnapshotInterval(legacy,config.ScanIntervalMs)/1000d;
         var anyStatus=S.NeedsSelfStatuses;
         var needOthers=S.NeedsOtherActors(legacy);
@@ -88,7 +88,7 @@ public sealed partial class Plugin
                 if(StatusRules.Control(status.StatusId))selfControls.Add((status.StatusId,status.RemainingTime,StatusRules.Purifiable(status.StatusId)));
             }
         var readinessStart=watch.Elapsed.TotalMilliseconds;
-        var needLb=legacy&&config.ShowMaxCount||Enumerable.Range(39,7).Any(On)||On(87)||On(88)||On(89);
+        var needLb=CountHighlightEnabled||S.KuzushiDisplay&&S.KuzushiFullLbOnly||Enumerable.Range(39,7).Any(On)||On(87)||On(88)||On(89);
         fullLb=needLb&&GameZantetsukenAction.IsLimitBreakFull();
         guardReady=On(50)&&Ready(29054,player.GameObjectId);
         purifyReady=On(52)&&Ready(29056,player.GameObjectId);
@@ -163,11 +163,11 @@ public sealed partial class Plugin
             areaCandidates.Sort((a,b)=>b.Count!=a.Count?b.Count.CompareTo(a.Count):a.Center.Actor.EntityId.CompareTo(b.Center.Actor.EntityId));
         }
         RecordCost("area",watch.Elapsed.TotalMilliseconds-geometryStart);
-        var marked=observations.Where(o=>o.Enemy&&o.OwnKuzushi>0).ToArray();
+        var marked=observations.Where(o=>o.Enemy&&o.OwnKuzushi>0&&o.Eligible(S.ZantetsukenExcludeGuard,S.ZantetsukenExcludeInvulnerable)).ToArray();
         var opportunity=fullLb&&player.ClassJob.RowId==Rules.SamuraiJob&&marked.Length>0;
         recommended=null;supportLbCount=0;
         var lbStart=watch.Elapsed.TotalMilliseconds;
-        if(opportunity&&(legacy&&config.ShowMaxCount||On(41)||On(45)||On(89)))
+        if(opportunity&&(CountHighlightEnabled||On(41)&&(S.BestMarker||S.BestLine)||On(45)||On(89)))
         {
             var candidates=marked.Where(o=>o.Eligible(S.ZantetsukenExcludeGuard,S.ZantetsukenExcludeInvulnerable)).Select(o=>o.Actor).ToArray();
             var best=Zantetsuken.FindBest(candidates,player.Position,targets.Target?.GameObjectId??0,zantetsukenAction.CanReach);
@@ -181,7 +181,6 @@ public sealed partial class Plugin
         if(On(93)&&!low&&!player.IsDead)lowHpSince=0;
         Alert(24,areaCandidates.Count>0&&areaCandidates[0].Count>=S.AlertCount,now,2);
         Alert(33,marked.Any(o=>!previousMarked.Contains(o.Actor.ObjectId)),now,2,false);
-        Alert(34,marked.Length>previousOwn,now,2,false);
         Alert(35,previousOwn>0&&marked.Length==0,now,1,false);
         Alert(39,fullLb,now,2);Alert(40,opportunity,now,3);
         Alert(46,low,now,10);Alert(47,!player.IsDead&&selfHpRate<=-S.RapidLossPercent,now,9);

@@ -22,6 +22,7 @@ public sealed class Configuration : IPluginConfiguration
     public Vector4 LineColor = new(1f, 0.32f, 0.12f, 0.85f);
     public Vector4 MarkerColor = new(1f, 0.75f, 0.12f, 1f);
     public float LineWidth = 1.5f;
+    public float LineHeight = .8f;
     public float MarkerSize = 12f;
     public float MarkerHeight = 2.5f;
     public float MaxDistance = 50f;
@@ -38,17 +39,29 @@ public sealed class Configuration : IPluginConfiguration
 
     public void Sanitize()
     {
-        Support ??= new();
+        Support ??= new();Support.Features??=[];Support.DisabledGroups??=[];
         if(Version<2){Support.MeleeRange=Clamp(LowHpRange,1,50,3);Version=2;}
+        if(Version<3)
+        {
+            if(Support.DisabledGroups.Remove(2))
+            {
+                Support.KuzushiDisplay=Support.ZantetsukenSupport=Support.SamuraiNotifications=false;
+                foreach(var set in new[]{Support.Features,Support.SmallFeatures,Support.LargeFeatures}.Where(s=>s!=null))
+                {set!.Remove(37);set.Remove(38);set.Remove(39);}
+            }
+            Support.TimerColor=Support.GoodColor;Support.ExpiringColor=Support.BadColor;Support.TimerSize=Support.TextSize;
+            Version=3;
+        }
         Support.Sanitize(); Ledger ??= new(); Ledger.Sanitize();
         LowHpRange = Clamp(LowHpRange, 1, 50, 3);
         CountColor = Color(CountColor);
         CountSize = Clamp(CountSize, 12, 96, 32);
         CountHeight = Clamp(CountHeight, 0, 6, 2.5f);
         CountOffsetY = Clamp(CountOffsetY, -300, 300, -25);
+        LineHeight = Clamp(LineHeight,0,6,.8f);
         LineWidth = Clamp(LineWidth, 0.5f, 5f, 1.5f);
         MarkerSize = Clamp(MarkerSize, 5f, 30f, 12f);
-        MarkerHeight = Clamp(MarkerHeight, 1f, 5f, 2.5f);
+        MarkerHeight = Clamp(MarkerHeight, 0f, 6f, 2.5f);
         MaxDistance = Clamp(MaxDistance, 5f, 100f, 50f);
         ScanIntervalMs = Math.Clamp(ScanIntervalMs, 50, 500);
         LineColor = Color(LineColor);

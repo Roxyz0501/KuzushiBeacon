@@ -201,7 +201,7 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     Check(SupportOptions.JobRange(34,3,20)==3 && SupportOptions.JobRange(41,3,20)==3 && SupportOptions.JobRange(19,3,20)==3,"melee and tanks use 3m");
     Check(SupportOptions.JobRange(23,3,20)==20 && SupportOptions.JobRange(24,3,20)==20 && SupportOptions.JobRange(42,3,20)==20,"ranged and healers use 20m");
     Check(FeatureCatalog.All.Select(f=>f.Id).Distinct().Count()==FeatureCatalog.All.Length,"unique feature switches");
-    foreach(var id in Enumerable.Range(16,60).Concat(Enumerable.Range(77,24)).Where(id=>id is not (42 or 70 or 72 or 81)))
+    foreach(var id in Enumerable.Range(16,60).Concat(Enumerable.Range(77,24)).Where(id=>id is not (34 or 42 or 70 or 72 or 81)))
         Check(FeatureCatalog.All.Any(f=>f.Id==id),"requested feature has a switch: "+id);
     options.Features.Add(46);Check(options.NeedsMonitor,"survival feature requests monitoring");
     options.DisabledGroups.Add(3);Check(!options.On(46)&&!options.NeedsMonitor,"category disable stops its work");
@@ -250,6 +250,19 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     Check(!p.Features.Contains(77)&&p.LargeFeatures.Count==0&&p.SmallFeatures.Contains(79),"category disable keeps edits on original profile when profile switch is turned off");
     p.UpdateMs=500;Check(p.SnapshotInterval(true,100)==100&&p.SnapshotInterval(false,100)==500,"legacy interval affects shared sampling");
     p.UpdateMs=50;Check(p.SnapshotInterval(true,100)==50,"shared snapshot respects faster support interval");
+}
+{
+    var p=new SupportOptions {Features=[31,32,33,34,35,39,41,43],SmallFeatures=[34],LargeFeatures=[33,34]};p.Sanitize();
+    Check(!FeatureCatalog.ById.ContainsKey(34)&&p.Features.Contains(33)&&!p.Features.Contains(34)&&p.SmallFeatures.Contains(33)&&!p.LargeFeatures.Contains(34),"duplicate acquisition notification migrates in all profiles");
+    p.KuzushiDisplay=false;Check(!p.On(31)&&!p.On(32)&&p.On(41),"Kuzushi display parent does not disable independent LB support");
+    p.KuzushiDisplay=true;p.OwnKuzushiDisplay=false;Check(!p.On(31)&&!p.On(32),"own-target parent gates timers");
+    p.OwnKuzushiDisplay=true;p.Features.Remove(31);Check(!p.On(32),"expiry color requires timer");
+    p.Features.Add(31);p.KuzushiFullLbOnly=true;Check(!p.KuzushiVisible(false)&&p.KuzushiVisible(true),"LB-only highlight condition");
+    p.SamuraiNotifications=false;Check(!p.On(33)&&!p.On(35)&&p.On(39),"shared LB alert independent of Samurai alerts");
+    p.DisabledGroups.Add(2);Check(p.On(39),"shared LB alert independent of Samurai group");
+    p.DisabledGroups.Clear();p.ZantetsukenSupport=false;Check(!p.On(41)&&!p.On(43),"LB support parent gates its children");
+    var old=new Configuration {Version=2};old.Support.DisabledGroups.Add(2);old.Sanitize();
+    Check(old.Version==3&&!old.Support.KuzushiDisplay&&!old.Support.ZantetsukenSupport&&!old.Support.SamuraiNotifications&&!old.Support.DisabledGroups.Contains(2),"disabled legacy Samurai category migrates to visible parent controls");
 }
 Console.WriteLine($"PASS {checks} checks; localization complete for {Loc.Languages.Length} languages.");
 

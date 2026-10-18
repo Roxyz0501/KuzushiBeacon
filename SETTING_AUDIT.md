@@ -1,3 +1,13 @@
+# 1.1.0.3 follow-up
+
+- Current catalog has 80 switches: legacy 34 merged into 33 in every saved profile. 39 moved to the shared job section (group 8).
+- KuzushiDisplay / OwnKuzushiDisplay / KuzushiFullLbOnly gate own legacy highlights and support timer/other-Samurai labels. TimerColor / TimerSize / TimerHeight / ExpiringColor feed LabelAt; expiry is conditional on the timer being enabled.
+- ZantetsukenSupport gates recommendation, head count and explicit LB commands. BestMarker / BestLine and their colors, sizes, widths, heights feed the recommendation drawing.
+- SamuraiNotifications gates 33/35/40, independently from shared LB alert 39. Global notification/audio settings still apply.
+- Shared exclusions feed marked snapshots, Zantetsuken.Included, timers, other-Samurai labels and eligibleHighlights cached at tracker scan time. Legacy line height is now configurable.
+- New fields are sanitized. Old colors, styles and disabled category state migrate; old duplicate notification choices merge without enabling additional duplicate sounds.
+- Other sidebar groups use named functional sections; details remain attached to their active feature. All editable colors use a picker without numeric input fields.
+
 # 設定・処理の対応監査 — 1.1.0.2 / 2026-10-19
 
 対象は全81支援スイッチ、共通数値・色設定、既存侍表示、コマンド、統合Ledger。以下のIDは監査用内部IDで、設定画面には表示しない。コードから処理接続を確認し、特定の回帰を自動テストした。実ゲームの全組合せを動作確認したという意味ではない。

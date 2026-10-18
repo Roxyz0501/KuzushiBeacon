@@ -31,6 +31,8 @@ public sealed partial class Plugin
             if(selectedSettingsPage==2)
             {
                 ImGui.TextUnformatted(L("ジョブ設定","Job settings"));
+                if(ImGui.CollapsingHeader(L("ジョブ共通の通知","Shared job alerts"),ImGuiTreeNodeFlags.DefaultOpen))
+                {if(DrawFeatureToggle(FeatureCatalog.ById[39]))MarkDirty();}
                 if(ImGui.BeginTabBar("JobSettingsTabs"))
                 {
                     if(ImGui.BeginTabItem(L("侍","Samurai")+"###Samurai"))
@@ -91,6 +93,7 @@ public sealed partial class Plugin
     }
     private void DrawFeatureGroup(int group)
     {
+        if(group==2){DrawSamuraiSettings();return;}
         bool changed=false;
         ImGui.TextUnformatted(FeatureCatalog.Group(group,config.Language));
         ImGui.TextWrapped(group switch
@@ -111,7 +114,7 @@ public sealed partial class Plugin
         ImGui.SameLine();
         if(ImGui.Button(L("表示・通知をまとめてオフ","Disable category features")))
         {S.SetCategoryFeatures(group,false);if(group==2)config.ShowLine=config.ShowMarker=config.ShowMaxCount=false;changed=true;}
-        foreach(var f in FeatureCatalog.All.Where(f=>f.Group==group))changed|=DrawFeatureToggle(f);
+        changed|=DrawFeatureSections(group);
         ImGui.Separator();
         bool Any(params int[] ids)=>ids.Any(On);
         switch(group)
@@ -132,11 +135,6 @@ public sealed partial class Plugin
                     changed|=ImGui.SliderFloat(L("範囲の半径","Area radius"),ref S.AreaRadius,1,30,"%.1f m");
                 }
                 break;
-            case 2:
-                ImGui.TextUnformatted(L("斬鉄剣コマンドの共通設定","Shared Zantetsuken command settings"));
-                changed|=ImGui.Checkbox(L("斬鉄剣：防御を除外（通常はオフ）","Zantetsuken: exclude Guard (normally off)"),ref S.ZantetsukenExcludeGuard);
-                changed|=ImGui.Checkbox(L("斬鉄剣：既知の無敵を除外","Zantetsuken: exclude known invulnerability"),ref S.ZantetsukenExcludeInvulnerable);
-                DrawLegacy(2);break;
             case 3: case 4:
                 if(Any(58,61,62,63,65,66,75))
                 {
@@ -161,9 +159,9 @@ public sealed partial class Plugin
                 {
                     ImGui.TextUnformatted(L("支援表示の共通設定","Shared support display settings"));
                     changed|=ImGui.SliderFloat(L("文字サイズ","Text size"),ref S.TextSize,12,40,"%.0f px");
-                    changed|=ImGui.ColorEdit4(L("射程内・味方の色","In-range / ally color"),ref S.GoodColor);
-                    changed|=ImGui.ColorEdit4(L("射程外・危険の色","Out-of-range / danger color"),ref S.BadColor);
-                    if(Any(19,36,67,74,83))changed|=ImGui.ColorEdit4(L("他者の崩し・追跡色","Other Kuzushi / tracking color"),ref S.OtherColor);
+                    changed|=PickColor(L("射程内・味方の色","In-range / ally color"),ref S.GoodColor);
+                    changed|=PickColor(L("射程外・危険の色","Out-of-range / danger color"),ref S.BadColor);
+                    if(Any(19,36,67,74,83))changed|=PickColor(L("他者の崩し・追跡色","Other Kuzushi / tracking color"),ref S.OtherColor);
                 }
                 break;
             case 6:
@@ -301,12 +299,12 @@ public sealed partial class Plugin
         var good=ImGui.ColorConvertFloat4ToU32(S.GoodColor);var bad=ImGui.ColorConvertFloat4ToU32(S.BadColor);var other=ImGui.ColorConvertFloat4ToU32(S.OtherColor);
         var rows=new List<string>();occupiedLabels.Clear();int drawn=0;
         void Row(int id,string value){if(On(id))rows.Add(FeatureCatalog.Name(id,config.Language)+": "+value);}
-        void LabelAt(Vector3 position,string text,uint color,float distance=0)
+        void LabelAt(Vector3 position,string text,uint color,float distance=0,float? textSize=null)
         {
             if(drawn>=(On(97)?S.MaxDraw:100)||!Project(position,out var anchor))return;
-            if(On(84))for(int pass=0;pass<8&&occupiedLabels.Any(p=>Math.Abs(p.X-anchor.X)<100&&Math.Abs(p.Y-anchor.Y)<S.TextSize+4);pass++)anchor.Y-=S.TextSize+4;
+            if(On(84))for(int pass=0;pass<8&&occupiedLabels.Any(p=>Math.Abs(p.X-anchor.X)<100&&Math.Abs(p.Y-anchor.Y)<(textSize??S.TextSize)+4);pass++)anchor.Y-=(textSize??S.TextSize)+4;
             occupiedLabels.Add(anchor);drawn++;
-            var size=S.TextSize*(On(85)?Math.Clamp(1-distance/150,.55f,1):1);
+            var size=(textSize??S.TextSize)*(On(85)?Math.Clamp(1-distance/150,.55f,1):1);
             draw.AddText(ImGui.GetFont(),size,anchor+Vector2.One,0xFF000000,text);draw.AddText(ImGui.GetFont(),size,anchor,color,text);
         }
         var detail=!On(78)||(player.StatusFlags&StatusFlags.InCombat)!=0;
@@ -335,11 +333,25 @@ public sealed partial class Plugin
             foreach(var o in observations)
             {
                 var distance=o.Distance(player.Position,player.HitboxRadius);
-                if(o.OwnKuzushi>now-supportAt&&(On(31)||On(32)))LabelAt(o.Actor.Position+Vector3.UnitY*3,
-                    On(31)?$"{L("崩し","Kuzushi")} {Math.Max(0,o.OwnKuzushi-(now-supportAt)):F1}s":"◆",
-                    On(32)&&o.OwnKuzushi-(now-supportAt)<=S.ExpiringSeconds?bad:good,distance);
-                if(On(36)&&o.OtherKuzushi>now-supportAt)LabelAt(o.Actor.Position+Vector3.UnitY*3.6f,L("他の侍 ◇","Other SAM ◇"),other,distance);
-                if(On(41)&&recommended?.ObjectId==o.Actor.ObjectId)LabelAt(o.Actor.Position+Vector3.UnitY*4,"★ LB",good,distance);
+                var included=o.Eligible(S.ZantetsukenExcludeGuard,S.ZantetsukenExcludeInvulnerable);
+                if(included&&S.KuzushiVisible(fullLb))
+                {
+                    if(o.OwnKuzushi>now-supportAt&&On(31))
+                    {
+                        var remaining=Math.Max(0,o.OwnKuzushi-(now-supportAt));
+                        var color=ImGui.ColorConvertFloat4ToU32(On(32)&&remaining<=S.ExpiringSeconds?S.ExpiringColor:S.TimerColor);
+                        LabelAt(o.Actor.Position+Vector3.UnitY*S.TimerHeight,$"{L("崩し","Kuzushi")} {remaining:F1}s",color,distance,S.TimerSize);
+                    }
+                    if(On(36)&&o.OtherKuzushi>now-supportAt)LabelAt(o.Actor.Position+Vector3.UnitY*3.6f,L("他の侍 ◇","Other SAM ◇"),other,distance);
+                }
+                if(included&&fullLb&&On(41)&&recommended?.ObjectId==o.Actor.ObjectId&&drawn<(On(97)?S.MaxDraw:100))
+                {
+                    if(S.BestMarker||S.BestLine)drawn++;
+                    if(S.BestMarker&&Project(o.Actor.Position+Vector3.UnitY*S.BestMarkerHeight,out var bestHead))
+                        DrawMarker(draw,bestHead,S.BestMarkerSize,ImGui.ColorConvertFloat4ToU32(S.BestMarkerColor),S.BestMarkerColor.W);
+                    if(S.BestLine&&Project(player.Position+Vector3.UnitY*S.BestLineHeight,out var bestFrom)&&Project(o.Actor.Position+Vector3.UnitY*S.BestLineHeight,out var bestTo))
+                        draw.AddLine(bestFrom,bestTo,ImGui.ColorConvertFloat4ToU32(S.BestLineColor),S.BestLineWidth);
+                }
                 if(On(69)&&o.Ally&&o.Percent<=S.LowHpPercent)LabelAt(o.Actor.Position+Vector3.UnitY*3,$"+ {o.Percent:F0}%",good,distance);
                 if(On(74)&&focusedEnemy?.Actor.ObjectId==o.Actor.ObjectId)LabelAt(o.Actor.Position+Vector3.UnitY*4,L("集中対象 ◎","Focused ◎"),other,distance);
                 if(o.Ally&&o.Actor.ObjectId==trackedAlly)

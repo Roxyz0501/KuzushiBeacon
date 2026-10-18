@@ -22,6 +22,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly GameZantetsukenAction zantetsukenAction;
     private readonly List<Actor> countCandidates = new(Tracker.MaxTargets);
     private int maximumCount;
+    private readonly HashSet<ulong> eligibleHighlights=[];
     private double countExpiresAt;
     private double nextCommand;
     private bool observingRequest;
@@ -110,7 +111,7 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 if (disposed || Now - requestedAt > 0.5 || Now < nextCommand || zantetsukenAction.Gate.Pending) return;
                 nextCommand = Now + 0.25;
-                if (!config.Enabled || !client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable(); return; }
+                if (!config.Enabled || !S.ZantetsukenSupport || !client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable(); return; }
                 var player = objects.LocalPlayer;
                 if (player is null || !player.IsValid() || player.IsDead || player.ClassJob.RowId != Rules.SamuraiJob)
                 { CommandUnavailable(); return; }
@@ -173,7 +174,9 @@ public sealed partial class Plugin : IDalamudPlugin
         ImGui.SetNextItemWidth(-1);
         return "###" + key;
     }
-    private bool MonitoringAllowed() => !disposed && !faulted && config.Enabled && ((!S.DisabledGroups.Contains(2) && (config.ShowLine || config.ShowMarker || config.ShowMaxCount)) || S.NeedsMonitor)
+    private bool OwnHighlightsEnabled => !S.DisabledGroups.Contains(2)&&S.KuzushiDisplay&&S.OwnKuzushiDisplay&&(config.ShowLine||config.ShowMarker);
+    private bool CountHighlightEnabled => !S.DisabledGroups.Contains(2)&&S.ZantetsukenSupport&&config.ShowMaxCount;
+    private bool MonitoringAllowed() => !disposed && !faulted && config.Enabled && ((OwnHighlightsEnabled||CountHighlightEnabled) || S.NeedsMonitor)
         && client.IsLoggedIn && client.IsPvPExcludingDen;
 
     private void Reconcile() => _ = ReconcileAsync();
@@ -215,7 +218,7 @@ public sealed partial class Plugin : IDalamudPlugin
         tracker.Clear();
         maximumCount = 0;
         countExpiresAt = 0;
-        countCandidates.Clear();
+        countCandidates.Clear();eligibleHighlights.Clear();
         trackedOwner = 0;
     }
 
@@ -239,7 +242,7 @@ public sealed partial class Plugin : IDalamudPlugin
             // LocalPlayer can disappear during zoning. Keep the PvP callback alive
             // so detection resumes without requiring another client-state event.
             var player = objects.LocalPlayer;
-            if (!(config.ShowLine||config.ShowMarker||config.ShowMaxCount) || S.DisabledGroups.Contains(2) || player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead)
+            if (!(OwnHighlightsEnabled||CountHighlightEnabled) || S.DisabledGroups.Contains(2) || player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead)
             {
                 tracker.Clear();
                 maximumCount = 0;
@@ -251,18 +254,26 @@ public sealed partial class Plugin : IDalamudPlugin
             var now = Now;
             // Reuse one bounded scan for both overlays. Count must not depend on highlight distance.
             tracker.Update(true, now, player.EntityId, player.Position,
-                config.ShowMaxCount ? float.MaxValue : config.MaxDistance, config.ScanIntervalMs,
+                CountHighlightEnabled ? float.MaxValue : config.MaxDistance, config.ScanIntervalMs,
                 sharedSnapshot ? new SnapshotWorld(observations,player.EntityId,now-supportAt) : world);
             if (previousScan == tracker.ScanCount) return;
+            eligibleHighlights.Clear();
+            foreach(var target in tracker.Targets)
+            {
+                var eligible=sharedSnapshot
+                    ? observations.Any(o=>o.Actor.ObjectId==target.Actor.ObjectId&&o.Eligible(S.ZantetsukenExcludeGuard,S.ZantetsukenExcludeInvulnerable))
+                    : zantetsukenAction.Included(target.Actor);
+                if(eligible)eligibleHighlights.Add(target.Actor.ObjectId);
+            }
             maximumCount = 0;
             countExpiresAt = 0;
-            if (config.ShowMaxCount && tracker.Targets.Count > 0 && GameZantetsukenAction.IsLimitBreakFull())
+            if (CountHighlightEnabled && tracker.Targets.Count > 0 && GameZantetsukenAction.IsLimitBreakFull())
             {
                 countCandidates.Clear();
                 countExpiresAt = double.MaxValue;
                 foreach (var target in tracker.Targets)
                 {
-                    if (now >= target.ExpiresAt || !sharedSnapshot && !zantetsukenAction.Included(target.Actor)) continue;
+                    if (now >= target.ExpiresAt || !eligibleHighlights.Contains(target.Actor.ObjectId)) continue;
                     if(!sharedSnapshot)countCandidates.Add(target.Actor);
                     countExpiresAt = Math.Min(countExpiresAt, target.ExpiresAt);
                 }
@@ -283,14 +294,15 @@ public sealed partial class Plugin : IDalamudPlugin
             if (player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead || player.EntityId != trackedOwner) return;
             var now = Now;
             var draw = ImGui.GetBackgroundDrawList();
-            if (config.ShowMaxCount && maximumCount > 0
+            if (CountHighlightEnabled && maximumCount > 0
                 && Zantetsuken.ShowCount(GameZantetsukenAction.IsLimitBreakFull(), maximumCount, countExpiresAt, now)
                 && Project(player.Position + Vector3.UnitY * config.CountHeight, out var countHead))
                 DrawCount(ImGui.GetForegroundDrawList(), countHead + new Vector2(0, config.CountOffsetY), maximumCount);
+            if(!OwnHighlightsEnabled||!S.KuzushiVisible(!S.KuzushiFullLbOnly||GameZantetsukenAction.IsLimitBreakFull()))return;
             var lineColor = ImGui.ColorConvertFloat4ToU32(config.LineColor);
             var markerColor = ImGui.ColorConvertFloat4ToU32(config.MarkerColor);
             Vector2 from = default;
-            bool fromVisible = config.ShowLine && Project(player.Position + Vector3.UnitY * 0.8f, out from);
+            bool fromVisible = config.ShowLine && Project(player.Position + Vector3.UnitY * config.LineHeight, out from);
             if (config.ShowLine && !fromVisible) projectionFailures++;
             foreach (var target in tracker.Targets)
             {
@@ -298,9 +310,10 @@ public sealed partial class Plugin : IDalamudPlugin
                 var actor = objects[target.Actor.Index];
                 if (actor is null || !actor.IsValid() || actor.EntityId != target.Actor.EntityId
                     || actor.GameObjectId != target.Actor.ObjectId || actor.IsDead || !actor.IsTargetable) continue;
+                if(!eligibleHighlights.Contains(target.Actor.ObjectId))continue;
                 var position = actor.Position;
                 if (Vector3.DistanceSquared(position, player.Position) > config.MaxDistance * config.MaxDistance) continue;
-                if (fromVisible && Project(position + Vector3.UnitY * 0.8f, out var to))
+                if (fromVisible && Project(position + Vector3.UnitY * config.LineHeight, out var to))
                 {
                     draw.AddLine(from, to, lineColor, config.LineWidth);
                     drawnLines++;
@@ -396,7 +409,7 @@ public sealed partial class Plugin : IDalamudPlugin
         ImGui.TextWrapped(T(faulted ? "Faulted" : subscribed ? "Active" : "Idle"));
         if(ImGui.Checkbox(Label("Enabled"), ref config.Enabled)){faulted=false;MarkDirty();}
         if(ImGui.Button(L("支援機能を全てオン（検証モードを除く）","Enable all support features (except dry run)")))
-        {config.Enabled=true;S.SetAllFeatures(true);config.ShowLine=config.ShowMarker=config.ShowMaxCount=true;MarkDirty();}
+        {config.Enabled=true;S.SetAllFeatures(true);S.KuzushiDisplay=S.OwnKuzushiDisplay=S.ZantetsukenSupport=S.SamuraiNotifications=true;config.ShowLine=config.ShowMarker=config.ShowMaxCount=true;MarkDirty();}
         if(ImGui.Button(L("支援機能を全てオフ","Disable all support features")))
         {config.Enabled=false;S.SetAllFeatures(false);config.ShowLine=config.ShowMarker=config.ShowMaxCount=false;MarkDirty();}
         if(ImGui.Checkbox(L("通知をまとめてオン","Enable all notifications"),ref S.Notifications))MarkDirty();
@@ -406,65 +419,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private void DrawLegacy(int section)
     {
         bool changed=false;
-        if(section==2)
+        if(section==7&&(OwnHighlightsEnabled||CountHighlightEnabled))
         {
-        changed |= ImGui.Checkbox(Label("ShowLine"), ref config.ShowLine);
-        HoverHelp(L("自分と崩し対象を線で結びます。オンにすると色と太さを調整できます。","Connects you to your Kuzushi targets. Enable to configure line color and width."));
-        if(config.ShowLine&&!S.DisabledGroups.Contains(2))
-        {
-        changed |= ImGui.ColorEdit4(Control("LineColor"), ref config.LineColor, ImGuiColorEditFlags.AlphaBar);
-        changed |= ImGui.SliderFloat(Control("LineWidth"), ref config.LineWidth, 0.5f, 5f, "%.1f px");
-        }
-        ImGui.Separator();
-        changed |= ImGui.Checkbox(Label("ShowMaxCount"), ref config.ShowMaxCount);
-        HoverHelp(L("LB満タン時だけ最大巻き込み人数を自分の頭上に表示します。人数の計算も満タン時のみです。","Shows maximum coverage over your head and calculates it only with full LB."));
-        if(config.ShowMaxCount&&!S.DisabledGroups.Contains(2))
-        {
-        changed |= ImGui.ColorEdit4(Control("CountColor"), ref config.CountColor, ImGuiColorEditFlags.AlphaBar);
-        changed |= ImGui.SliderFloat(Control("CountSize"), ref config.CountSize, 12, 96, "%.0f px");
-        changed |= ImGui.SliderFloat(Control("CountHeight"), ref config.CountHeight, 0, 6, "%.1f m");
-        changed |= ImGui.SliderFloat(Control("CountOffset"), ref config.CountOffsetY, -300, 300, "%.0f px");
-        ImGui.Checkbox(Label("CountPreview"), ref previewCount);
-        if (previewCount)
-        {
-            var player = objects.LocalPlayer;
-            if (player is not null && player.IsValid() && Project(player.Position + Vector3.UnitY * config.CountHeight, out var head))
-                DrawCount(ImGui.GetForegroundDrawList(), head + new Vector2(0, config.CountOffsetY), 3);
-        }
-        ImGui.Separator();
-        }
-        changed |= ImGui.Checkbox(Label("ShowMarker"), ref config.ShowMarker);
-        HoverHelp(L("自分の崩し対象の頭上にマーカーを表示します。","Shows a marker above your own Kuzushi targets."));
-        if(config.ShowMarker&&!S.DisabledGroups.Contains(2))
-        {
-        changed |= ImGui.ColorEdit4(Control("MarkerColor"), ref config.MarkerColor, ImGuiColorEditFlags.AlphaBar);
-        changed |= ImGui.SliderFloat(Control("MarkerSize"), ref config.MarkerSize, 5f, 30f, "%.0f px");
-        changed |= ImGui.SliderFloat(Control("MarkerHeight"), ref config.MarkerHeight, 1f, 5f, "%.1f m");
-        ImGui.TextWrapped(T("HeightHelp"));
-        }
-        ImGui.Separator();
-        ImGui.Separator();
-        if((config.ShowLine||config.ShowMarker||config.ShowMaxCount)&&!S.DisabledGroups.Contains(2))
-        {
-        ImGui.TextUnformatted(T("Preview"));
-        var start = ImGui.GetCursorScreenPos();
-        var width = Math.Max(180f, ImGui.GetContentRegionAvail().X);
-        ImGui.InvisibleButton("###Preview", new Vector2(width, 75));
-        var draw = ImGui.GetWindowDrawList();
-        draw.AddRectFilled(start, start + new Vector2(width, 75), 0xFF24201C, 6);
-        var from = start + new Vector2(30, 55);
-        var to = start + new Vector2(width - 40, 55);
-        draw.AddCircleFilled(from, 5, 0xFFDDDDDD);
-        if (config.ShowMaxCount) DrawCount(draw, from - new Vector2(0, 10), 3);
-        draw.AddCircleFilled(to, 5, 0xFFDDDDDD);
-        if (config.ShowLine) draw.AddLine(from, to, ImGui.ColorConvertFloat4ToU32(config.LineColor), config.LineWidth);
-        if (config.ShowMarker) DrawMarker(draw, to - new Vector2(0, 8), Math.Min(22, config.MarkerSize),
-            ImGui.ColorConvertFloat4ToU32(config.MarkerColor), config.MarkerColor.W);
-        }
-        }
-        if(section==7&&!S.DisabledGroups.Contains(2)&&(config.ShowLine||config.ShowMarker||config.ShowMaxCount))
-        {
-        if(config.ShowLine||config.ShowMarker)changed |= ImGui.SliderFloat(Control("Distance"), ref config.MaxDistance, 5f, 100f, "%.0f m");
+        if(OwnHighlightsEnabled)changed |= ImGui.SliderFloat(Control("Distance"), ref config.MaxDistance, 5f, 100f, "%.0f m");
         changed |= ImGui.SliderInt(Control("Interval"), ref config.ScanIntervalMs, 50, 500, "%d ms");
         ImGui.TextWrapped(T("PerformanceHelp"));
         ImGui.TextWrapped(L("他の支援機能と収集を共有するときは短い方の間隔で収集します。","When sharing with other support features, collection uses the shorter interval."));

@@ -167,6 +167,17 @@ foreach (var pvp in new[] { false, true })
     type.GetMethod("ReconcileLedger",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
     Check(counters["/pvplowhp"]==3,"unrelated configuration changes do not erase live counters when recording is off");
 }
+{
+    var host=new Host {Pvp=true};host.Config.ShowMaxCount=false;host.Config.Support.KuzushiDisplay=false;
+    using var plugin=host.Load();
+    Check(host.Count("framework:Update")==0&&host.ObjectReads==0,"Kuzushi parent off stops legacy-only monitoring without clearing saved line/marker choices");
+    host.Config.Support.KuzushiDisplay=true;
+    typeof(Plugin).GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    Check(host.Count("framework:Update")==1,"Kuzushi parent on restores saved legacy displays");
+    host.Config.Support.ZantetsukenSupport=false;
+    host.Commands["/kuzushizantetsuken"].Handler("/kuzushizantetsuken","");
+    Check(host.ObjectReads==0,"LB support parent blocks command before native/game object access");
+}
 Console.WriteLine($"PASS {checks} host lifecycle checks (real Plugin + thread-enforcing service doubles).");
 
 sealed class Host

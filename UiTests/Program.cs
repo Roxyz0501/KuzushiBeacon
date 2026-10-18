@@ -104,6 +104,8 @@ internal static unsafe class Program
    actors.Add(new(new(2,2,2,new(5,0,0),true,true),5000,50000,.5f,true,false,1,4,0,false,false,-1000,false));
    actors.Add(new(new(3,3,3,new(9,0,0),true,true),10000,50000,.5f,true,false,1,1,0,false,false,2000,true));
    actors.Add(new(new(4,4,4,new(-4,0,0),true,true),15000,50000,.5f,false,true,2,0,0,false,false,0,false));
+   UiStub.Config.Support.BestLine=true;
+   Set("fullLb",true);
    Set("currentObservation",actors[0]);Set("recommended",actors[0].Actor);Set("trackedAlly",4UL);Set("nearbyEnemies",2);Set("nearbyAllies",1);Set("guardReady",true);Set("chiten",3f);
    Set("supportAt",System.Diagnostics.Stopwatch.GetTimestamp()/(double)System.Diagnostics.Stopwatch.Frequency);
    for(int i=0;i<2;i++){ImGui.NewFrame();Call("DrawSupportOverlay");ImGui.Render();}

@@ -16,10 +16,10 @@ public static class FeatureCatalog
         new(26,1,"条件解除で通知を消す","Clear alerts when conditions end"),new(27,1,"対象のHP減少速度","Target HP loss rate"),
         new(28,1,"回復した対象を表示","Highlight healed targets"),new(29,1,"攻撃候補一覧","Attack candidate list"),new(30,1,"候補を選んだ理由","Selection reasons"),
         new(31,2,"敵の頭上に崩しの残り秒数を表示","Kuzushi remaining time"),new(32,2,"崩しが切れる直前に色を変える","Expiring Kuzushi color"),
-        new(33,2,"新しく崩しが付いたら音で通知","New Kuzushi sound"),new(34,2,"崩しが付いた敵の人数が増えたら通知","Kuzushi count increase"),
+        new(33,2,"新しく崩しが付いたら音で通知","New Kuzushi sound"),
         new(35,2,"崩しがすべて消えたら通知","All Kuzushi ended"),new(36,2,"他の侍の崩しを区別","Distinguish other samurai Kuzushi"),
         new(37,2,"地天の残り時間","Chiten timer"),new(38,2,"地天終了後の崩し残存","Kuzushi remaining after Chiten"),
-        new(39,2,"LBが満タンになったら通知","LB ready alert"),new(40,2,"LB満タンで崩しが付いたら通知","LB and Kuzushi opportunity"),
+        new(39,8,"LBが満タンになったら通知","LB ready alert"),new(40,2,"LB満タンで崩しが付いたら通知","LB and Kuzushi opportunity"),
         new(41,2,"最も多く巻き込める敵にマーカーを表示","Recommended Zantetsuken target"),
         new(43,2,"指定人数以上を巻き込めるときだけ斬鉄剣を要求","Minimum Zantetsuken coverage"),new(44,2,"斬鉄剣の待機・要求済み状態を表示","Zantetsuken request state"),
         new(45,2,"斬鉄剣の人数予測に関する注意を表示","Estimated hit conditions"),
@@ -77,6 +77,15 @@ public sealed class SupportOptions
     public Vector4 GoodColor = new(.2f,1,.6f,1), BadColor = new(1,.25f,.2f,1), OtherColor = new(.5f,.7f,1,1);
     public string MatchNote = "";
     public bool LedgerEnabled;
+    public bool KuzushiDisplay=true, OwnKuzushiDisplay=true, KuzushiFullLbOnly;
+    public bool ZantetsukenSupport=true, SamuraiNotifications=true;
+    public bool BestMarker=true, BestLine;
+    public Vector4 TimerColor=new(1,.9f,.2f,1), ExpiringColor=new(1,.25f,.2f,1);
+    public float TimerSize=18, TimerHeight=3;
+    public Vector4 BestMarkerColor=new(.2f,1,.6f,1), BestLineColor=new(.2f,1,.6f,.85f);
+    public float BestMarkerSize=14, BestMarkerHeight=4, BestLineWidth=1.5f, BestLineHeight=.8f;
+    public bool KuzushiVisible(bool fullLb) => KuzushiDisplay&&(!KuzushiFullLbOnly||fullLb);
+
     // Profiles override the new-feature set only; common language/support and legacy controls stay global.
     public HashSet<int>? SmallFeatures, LargeFeatures;
     [Newtonsoft.Json.JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
@@ -115,6 +124,11 @@ public sealed class SupportOptions
     public int SnapshotInterval(bool legacy,int legacyInterval) => legacy?Math.Min(UpdateMs,legacyInterval):UpdateMs;
     public bool On(int id, bool? large = null)
     {
+        if(id==32&&!ActiveFeatures(large).Contains(31))return false;
+        if(id is 31 or 32 && (!KuzushiDisplay||!OwnKuzushiDisplay))return false;
+        if(id==36&&!KuzushiDisplay)return false;
+        if(id is 41 or 43 or 44 or 45 && !ZantetsukenSupport)return false;
+        if(id is 33 or 35 or 40 && !SamuraiNotifications)return false;
         var feature = FeatureCatalog.ById.GetValueOrDefault(id);
         if (feature is null || DisabledGroups.Contains(feature.Group)) return false;
         var set = id == 77 ? Features : ActiveFeatures(large);
@@ -128,6 +142,9 @@ public sealed class SupportOptions
     public void Sanitize()
     {
         Features ??= []; DisabledGroups ??= [];
+        foreach(var set in new[]{Features,SmallFeatures,LargeFeatures}.Where(s=>s!=null))
+            if(set!.Remove(34))set.Add(33); // Merge duplicate acquisition alerts, including saved profiles.
+
         Features.RemoveWhere(id => !FeatureCatalog.All.Any(f=>f.Id==id)); DisabledGroups.RemoveWhere(g=>g<0||g>7);
         float F(float v,float lo,float hi,float def) => float.IsFinite(v)?Math.Clamp(v,lo,hi):def;
         MeleeRange=F(MeleeRange,1,3,3); RangedRange=F(RangedRange,1,20,20); AllyRange=F(AllyRange,1,20,20);
@@ -141,6 +158,10 @@ public sealed class SupportOptions
         FocusCount=Math.Clamp(FocusCount,1,50);NearbyIncrease=Math.Clamp(NearbyIncrease,1,50);Disadvantage=Math.Clamp(Disadvantage,1,50);
         KuzushiTone=Math.Clamp(KuzushiTone,0,2);LbTone=Math.Clamp(LbTone,0,2);DangerTone=Math.Clamp(DangerTone,0,2);
         Vector4 Color(Vector4 c)=>new(F(c.X,0,1,1),F(c.Y,0,1,1),F(c.Z,0,1,1),F(c.W,0,1,1));
+        TimerSize=F(TimerSize,12,96,18);TimerHeight=F(TimerHeight,0,6,3);
+        BestMarkerSize=F(BestMarkerSize,5,30,14);BestMarkerHeight=F(BestMarkerHeight,0,6,4);
+        BestLineWidth=F(BestLineWidth,.5f,5,1.5f);BestLineHeight=F(BestLineHeight,0,6,.8f);
+        TimerColor=Color(TimerColor);ExpiringColor=Color(ExpiringColor);BestMarkerColor=Color(BestMarkerColor);BestLineColor=Color(BestLineColor);
         GoodColor=Color(GoodColor);BadColor=Color(BadColor);OtherColor=Color(OtherColor);
         MatchNote=(MatchNote??"")[..Math.Min(MatchNote?.Length??0,200)];
     }
