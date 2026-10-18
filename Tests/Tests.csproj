@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../KuzushiBeacon/Zantetsuken.cs" Link="Zantetsuken.cs" />
     <Compile Include="../KuzushiBeacon/Tracking.cs" Link="Tracking.cs" />
     <Compile Include="../KuzushiBeacon/Configuration.cs" Link="Configuration.cs" />
     <Compile Include="../KuzushiBeacon/Loc.cs" Link="Loc.cs" />

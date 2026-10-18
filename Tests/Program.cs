@@ -106,6 +106,38 @@ cfg.LineWidth = float.NaN; cfg.MarkerSize = 1000; cfg.LineColor = new(float.NaN,
 cfg.ScanIntervalMs = 0; cfg.Sanitize();
 Check(cfg.LineWidth == 1.5f && cfg.MarkerSize == 30 && cfg.LineColor == new Vector4(1,0,1,1)
     && cfg.ScanIntervalMs == 50, "invalid config clamped");
+// Zantetsuken: maximize a target-centered 5m circle, never use a stale overlay cache.
+{
+    var w = new FakeWorld();
+    Actor A(int i, float x, float y = 0) => new(i, (uint)(i + 100), (ulong)(i + 100), new Vector3(x, y, 0), true, true);
+    void Add(Actor a, uint source = 10) { w.Actors.Add(a); w.Statuses[a.Index] = (3202, source, 2); }
+    Add(A(0, 10)); Add(A(1, 14)); Add(A(2, 18)); Add(A(3, 0));
+    var action = new FakeAction();
+    Check(!Zantetsuken.Execute(false, 10, Vector3.Zero, 0, w, action) && w.Enumerations == 0 && action.Checks == 0, "command inactive has zero reads/actions");
+    Check(Zantetsuken.Execute(true, 10, Vector3.Zero, 100, w, action) && action.Last?.Index == 1 && action.Attempts == 1, "maximum coverage beats current/nearest target");
+    action.Blocked.Add(1);
+    Check(Zantetsuken.Execute(true, 10, Vector3.Zero, 102, w, action) && action.Last?.Index == 2, "unusable centers excluded, current target wins tied coverage");
+    Check(Zantetsuken.Execute(true, 10, Vector3.Zero, 0, w, action) && action.Last?.Index == 0, "nearest wins tied coverage");
+    action.Blocked.Clear();
+    w.Statuses[1] = (3202, 999, 2);
+    Check(Zantetsuken.Execute(true, 10, Vector3.Zero, 101, w, action) && action.Last?.Index == 3, "other source neither selected nor counted");
+    w.Actors.Clear(); w.Statuses.Clear();
+    Add(A(0, 0)); Add(A(1, 5)); Add(A(2, 5.01f));
+    Check(Zantetsuken.Execute(true, 10, Vector3.Zero, 100, w, action) && action.Last?.Index == 1, "inclusive 5m boundary, outside excluded");
+    w.Actors[2] = A(2, 0, 10);
+    Check(Zantetsuken.Execute(true, 10, Vector3.Zero, 100, w, action) && action.Last?.Index == 0, "vertical separation is not counted as overlap");
+    action.Accept = false;
+    var attempts = action.Attempts;
+    Check(!Zantetsuken.Execute(true, 10, Vector3.Zero, 100, w, action) && action.Attempts == attempts + 1, "revalidation/execution failure never retries another target");
+    w.Statuses.Clear();
+    attempts = action.Attempts;
+    Check(!Zantetsuken.Execute(true, 10, Vector3.Zero, 100, w, action) && action.Attempts == attempts, "no current own status never acts");
+    w.Actors.Clear();
+    for (int i = 0; i < 500; i++) Add(A(i, i));
+    var reads = w.StatusReads; var evaluations = action.Checks;
+    Zantetsuken.Execute(true, 10, Vector3.Zero, 0, w, action);
+    Check(w.StatusReads - reads == 200 && action.Checks - evaluations == 200, "command scan and native availability checks bounded to 200");
+}
 Console.WriteLine($"PASS {checks} checks; localization complete for {Loc.Languages.Length} languages.");
 
 sealed class FakeWorld : IHighlightWorld
@@ -121,4 +153,14 @@ sealed class FakeWorld : IHighlightWorld
         return Statuses.TryGetValue(index, out var s) && Rules.OwnStatus(s.Status, s.Source, sourceId, s.Remaining)
             ? s.Remaining : 0;
     }
+}
+
+sealed class FakeAction : IZantetsukenAction
+{
+    public readonly HashSet<int> Blocked = [];
+    public int Checks, Attempts;
+    public bool Accept = true;
+    public Actor? Last;
+    public bool CanUse(Actor target) { Checks++; return !Blocked.Contains(target.Index); }
+    public bool TryExecute(Actor target, uint owner) { Attempts++; Last = target; return Accept; }
 }

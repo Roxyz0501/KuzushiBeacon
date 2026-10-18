@@ -1,5 +1,6 @@
 using System.Reflection;
 using Dalamud.Game;
+using Dalamud.Game.Command;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using KuzushiBeacon;
@@ -83,6 +84,15 @@ foreach (var pvp in new[] { false, true })
     Check(host.ObjectReads == reads && host.Count("framework:Update") == 0 && host.Count("ui:Draw") == 0,
         "recovery callback stops outside PvP with zero player reads");
 }
+{
+    var host = new Host { Pvp = false };
+    var plugin = host.Load();
+    Check(host.Commands.ContainsKey("/kuzushizantetsuken"), "macro command registered");
+    host.Commands["/kuzushizantetsuken"].Handler("/kuzushizantetsuken", "");
+    Check(host.ObjectReads == 0, "macro outside PvP never accesses game objects");
+    plugin.Dispose();
+    Check(host.Commands.Count == 0, "dispose removes both command handlers");
+}
 Console.WriteLine($"PASS {checks} host lifecycle checks (real Plugin + thread-enforcing service doubles).");
 
 sealed class Host
@@ -92,6 +102,7 @@ sealed class Host
     private object? ui;
     private object? player;
     public Queue<(Action Action, TaskCompletionSource Completion)> Queue { get; } = [];
+    public readonly Dictionary<string, CommandInfo> Commands = [];
     public bool Pvp;
     public bool ThrowOnRead;
     public bool PlayerAvailable = true;
@@ -105,7 +116,7 @@ sealed class Host
     public Host() => Framework = Stub<IFramework>("framework");
     public Plugin Load() => new(Stub<IDalamudPluginInterface>("pi"), Stub<IClientState>("client"),
         Stub<IObjectTable>("objects"), Framework, Stub<IGameGui>("gui"),
-        Stub<ICommandManager>("commands"), Stub<IPluginLog>("log"));
+        Stub<ICommandManager>("commands"), Stub<IPluginLog>("log"), Stub<ITargetManager>("targets"), Stub<IChatGui>("chat"));
     public int Count(string key) => events.TryGetValue(key, out var list) ? list.Count : 0;
     public int TotalSubscriptions => events.Values.Sum(x => x.Count);
     public void Raise(string key, params object?[] args)
@@ -141,6 +152,8 @@ sealed class Host
         }
         switch (name)
         {
+            case "AddHandler": Commands.Add((string)args[0]!, (CommandInfo)args[1]!); return true;
+            case "RemoveHandler": return Commands.Remove((string)args[0]!);
             case "GetPluginConfig": return new Configuration { Language = "ja" };
             case "get_UiLanguage": return "en";
             case "get_ClientLanguage": return ClientLanguage.Japanese;

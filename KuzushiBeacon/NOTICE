@@ -10,3 +10,7 @@ Dalamud public APIs are used as host dependencies (goatcorp, AGPL-3.0):
 https://github.com/goatcorp/Dalamud
 The Noto Sans CJK font supplied by Dalamud is used through its managed font API.
 No font binary, game artwork, game data table or Dalamud binary is redistributed.
+
+FFXIVClientStructs host bindings are used for normal action availability/execution:
+https://github.com/aers/FFXIVClientStructs (aers and contributors, MIT).
+No FFXIVClientStructs source or binary is redistributed.

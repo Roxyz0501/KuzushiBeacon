@@ -11,6 +11,11 @@ namespace KuzushiBeacon;
 
 public sealed class Plugin : IDalamudPlugin
 {
+    private const string ExecuteCommand = "/kuzushizantetsuken";
+    private readonly ITargetManager targets;
+    private readonly IChatGui chat;
+    private readonly IZantetsukenAction zantetsukenAction;
+    private double nextCommand;
     private const string Command = "/kuzushibeacon";
     private readonly IDalamudPluginInterface pi;
     private readonly IClientState client;
@@ -21,6 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly IPluginLog log;
     private readonly Configuration config;
     private readonly CommandInfo commandInfo;
+    private readonly CommandInfo executeCommandInfo;
     private readonly Tracker tracker = new();
     private readonly DalamudWorld world;
     private LocalizedFonts? fonts;
@@ -37,8 +43,10 @@ public sealed class Plugin : IDalamudPlugin
     private static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
     public Plugin(IDalamudPluginInterface pi, IClientState client, IObjectTable objects,
-        IFramework framework, IGameGui gui, ICommandManager commands, IPluginLog log)
+        IFramework framework, IGameGui gui, ICommandManager commands, IPluginLog log, ITargetManager targets, IChatGui chat)
     {
+        this.targets = targets;
+        this.chat = chat;
         this.pi = pi;
         this.client = client;
         this.objects = objects;
@@ -47,6 +55,7 @@ public sealed class Plugin : IDalamudPlugin
         this.commands = commands;
         this.log = log;
         world = new DalamudWorld(objects);
+        zantetsukenAction = new GameZantetsukenAction(client, objects, targets, world);
         config = pi.GetPluginConfig() as Configuration ?? new Configuration();
         config.Sanitize();
         ClientLanguage? game;
@@ -55,6 +64,8 @@ public sealed class Plugin : IDalamudPlugin
         if (config.InitializeLanguage(game, pi.UiLanguage)) pi.SavePluginConfig(config);
         commandInfo = new CommandInfo((_, _) => Open()) { HelpMessage = T("CommandHelp") };
         commands.AddHandler(Command, commandInfo);
+        executeCommandInfo = new CommandInfo((_, args) => { if (string.IsNullOrWhiteSpace(args)) ExecuteZantetsuken(); }) { HelpMessage = T("ExecuteHelp") };
+        commands.AddHandler(ExecuteCommand, executeCommandInfo);
         client.TerritoryChanged += TerritoryChanged;
         client.ClassJobChanged += JobChanged;
         client.EnterPvP += Reconcile;
@@ -64,6 +75,31 @@ public sealed class Plugin : IDalamudPlugin
         pi.UiBuilder.OpenConfigUi += Open;
         pi.UiBuilder.OpenMainUi += Open;
         Reconcile();
+    }
+
+    private void ExecuteZantetsuken() => _ = ExecuteZantetsukenAsync();
+
+    private async Task ExecuteZantetsukenAsync()
+    {
+        var requestedAt = Now;
+        try
+        {
+            await framework.RunOnFrameworkThread(() =>
+            {
+                if (disposed || Now - requestedAt > 0.5 || Now < nextCommand) return;
+                nextCommand = Now + 0.25;
+                if (!client.IsLoggedIn || !client.IsPvPExcludingDen) { chat.Print(T("ExecuteUnavailable")); return; }
+                var player = objects.LocalPlayer;
+                if (player is null || !player.IsValid() || player.IsDead || player.ClassJob.RowId != Rules.SamuraiJob)
+                { chat.Print(T("ExecuteUnavailable")); return; }
+                if (!Zantetsuken.Execute(true, player.EntityId, player.Position, targets.Target?.GameObjectId ?? 0,
+                    world, zantetsukenAction)) chat.Print(T("ExecuteUnavailable"));
+            });
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "Zantetsuken command failed; no retry will be attempted.");
+        }
     }
 
     private string T(string key) => Loc.Get(config.Language, key);
@@ -243,6 +279,7 @@ public sealed class Plugin : IDalamudPlugin
     private void DrawSettings()
     {
         ImGui.TextWrapped(T("Explanation"));
+        ImGui.TextWrapped(T("ExecuteHelp"));
         ImGui.TextWrapped(T(faulted ? "Faulted" : subscribed ? "Active" : "Idle"));
         ImGui.TextWrapped(T("DetectionMetrics"));
         ImGui.TextWrapped(string.Format(T("DetectionMetricsValue"), tracker.ScanCount, tracker.CandidateReads,
@@ -294,6 +331,7 @@ public sealed class Plugin : IDalamudPlugin
         if (code is null || code == config.Language) return;
         config.Language = code;
         commandInfo.HelpMessage = T("CommandHelp");
+        executeCommandInfo.HelpMessage = T("ExecuteHelp");
         dirty = true;
         Save();
     }
@@ -315,6 +353,7 @@ public sealed class Plugin : IDalamudPlugin
         pi.UiBuilder.OpenMainUi -= Open;
         pi.UiBuilder.Draw -= DrawSettingsWindow;
         commands.RemoveHandler(Command);
+        commands.RemoveHandler(ExecuteCommand);
         Save();
         fonts?.Dispose();
     }

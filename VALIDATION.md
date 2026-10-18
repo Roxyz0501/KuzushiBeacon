@@ -1,4 +1,16 @@
-# Validation — 2026-10-18
+# Validation — 2026-10-19
+
+## 1.0.0.4 explicit Zantetsuken command
+
+- Current game Action sheet: 29537 = PvP Zantetsuken, Range 20, EffectRange 5, CastType 2. Official Samurai job guide agrees on target-centered 5m AoE and 20m range.
+- Inspected upstream Dalamud ITargetManager and FFXIVClientStructs ActionManager declarations. Uses Target setter, CanUseActionOnTarget, GetActionInRangeOrLoS, GetActionStatus and UseAction with Macro mode (no queue). Builds against installed host bindings. No copied upstream code or shipped host binaries.
+- Command runs only on explicit invocation, framework thread, logged-in live SAM in PvP excluding Wolves' Den. It reads a fresh maximum 200-player snapshot, up to 200 status lists, maximum 40,000 pair distances, 200 availability evaluations plus final revalidation. No work is added to idle frames. Repeated calls within 250ms and dispatch delayed over 500ms are dropped.
+- 74 managed tests and 34 host tests pass. New checks cover inactive zero reads/actions, maximum coverage, blocked centers, ties, other source exclusion, 5m boundaries, vertical separation, failed action with no retry, empty status snapshot, 200-candidate cap, command registration, PvP gating and handler disposal.
+- Coverage uses 3D center distances, not exact server hit geometry. Native calls and actual macro execution cannot be exercised by managed doubles and remain unverified in game. Native API compatibility beyond the installed host is not guaranteed.
+- Source review: no packet send/receive APIs, packet serialization, hooks, cooldown/resource/position writes, bypass modes or automatic retries. Native pointers are confined to the action adapter; normal client action calls can produce normal game traffic. This supersedes the previous read-only implementation description below.
+- Framework/scan tests verify no outside-PvP monitoring regression. Command feedback/help is localized in all seven languages; 667 current source-string characters verified in all four host Noto Sans CJK regional font faces using cmap tables. Live font rendering remains unverified.
+
+## Earlier validation — 2026-10-18
 
 ## 1.0.0.3 monitoring recovery fix
 
