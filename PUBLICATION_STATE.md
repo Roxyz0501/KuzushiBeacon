@@ -1,3 +1,12 @@
+## 2026-10-19 — PvP Supporter 1.1.0.2 settings audit
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.2
+- Source/tag: 9072555298b787db4050e444d3f90c53ef4749ef.
+- ZIP: 177,821 bytes; SHA256 B1C3B1F14BD22C913548ABC90A45459E83AFD9BB44F117DD6CF36B4DC8E8E4D4. Anonymous redownload matches, eight allowed entries and version/internal identity verified; repository HTTP 200 and icon image/png.
+- Shared index commit: 0ef6cc7e021ab481c408f709721a3dd23e3838af. Connector and anonymous commit-pinned index return 1.1.0.2; ten other entries unchanged. Ordinary main URL initially caches 1.1.0.1.
+- SETTING_AUDIT.md records all 81 support switches, shared values, legacy displays and integrated Ledger consumers. Fixed active-profile edits, independent tracking/status collection, review visibility/export, request state, HUD text size and shared sampling. Conditional details and bilingual tooltips added; standard common top tabs unchanged.
+- 300 managed checks, 56 real-host checks, 2,781 Ledger checks and 477 headless UI frames pass. Actual ImGui input verifies active-profile changes and conditional details. No live-game validation or unpublished installed-file overwrite.
+
 ## 2026-10-19 — PvP Supporter 1.1.0.1
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.1
