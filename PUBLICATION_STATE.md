@@ -1,11 +1,18 @@
 # Publication state
 
-## 2026-10-18 — 1.0.0.2 diagnostic release preparation
+## 2026-10-18 — 1.0.0.2 diagnostic release published
 
 - Version 1.0.0.2 adds detection/source/duration/render diagnostics. No confirmed detection fix is claimed.
 - Original target matching retained; no unverified Hostile gate.
 - Installed plugin files have not been changed. Publish the release ZIP and shared repository index before considering distribution complete.
-- Publication verification pending.
+- Public release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.2
+- Public ZIP: https://github.com/Roxyz0501/KuzushiBeacon/releases/download/v1.0.0.2/KuzushiBeacon-1.0.0.2.zip
+- Source/tag commit: a9154483e6c3bf29eaa8a724bd9f9860a9171eaf.
+- ZIP: 57,301 bytes; SHA-256 5F5425577230453A76E4308DF16B314025CB99EF34834DC865A2721DB7D3CC9A. Anonymous download hash matches; public repository and PNG icon return HTTP 200.
+- Shared index commit: 3033056a370038f7c85e5503092fa6101fc2695e. Connector confirms version/URLs and all other ten entries unchanged. Main raw URL initially returned stale CDN content.
+- Validation: Release build zero warnings/errors; existing 64 managed and 25 host checks pass. Live detection remains unverified.
+- GitHub CLI authentication succeeds with network access; earlier sandbox-only authentication failure did not mean the credential had expired.
+
 
 
 ## 2026-10-18 — Kuzushi Beacon 1.0.0.1 installation fix
