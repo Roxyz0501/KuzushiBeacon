@@ -74,9 +74,8 @@ public sealed class Plugin : IDalamudPlugin
         ImGui.SetNextItemWidth(-1);
         return "###" + key;
     }
-    private bool Eligible() => !disposed && !faulted && config.Enabled && (config.ShowLine || config.ShowMarker)
-        && client.IsLoggedIn && client.IsPvPExcludingDen
-        && objects.LocalPlayer?.ClassJob.RowId == Rules.SamuraiJob;
+    private bool MonitoringAllowed() => !disposed && !faulted && config.Enabled && (config.ShowLine || config.ShowMarker)
+        && client.IsLoggedIn && client.IsPvPExcludingDen;
 
     private void Reconcile() => _ = ReconcileAsync();
 
@@ -90,7 +89,7 @@ public sealed class Plugin : IDalamudPlugin
             await framework.RunOnFrameworkThread(() =>
             {
                 if (disposed) return; // Unloaded before the queued first tick.
-                if (!Eligible()) { Stop(); return; }
+                if (!MonitoringAllowed()) { Stop(); return; }
                 if (subscribed) return;
                 tracker.Clear();
                 framework.Update += Update;
@@ -131,9 +130,11 @@ public sealed class Plugin : IDalamudPlugin
     {
         try
         {
-            if (!Eligible()) { Stop(); return; }
+            if (!MonitoringAllowed()) { Stop(); return; }
+            // LocalPlayer can disappear during zoning. Keep the PvP callback alive
+            // so detection resumes without requiring another client-state event.
             var player = objects.LocalPlayer;
-            if (player is null || !player.IsValid() || player.IsDead)
+            if (player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead)
             {
                 tracker.Clear();
                 trackedOwner = 0;
@@ -149,9 +150,9 @@ public sealed class Plugin : IDalamudPlugin
     {
         try
         {
-            if (!Eligible() || tracker.Targets.Count == 0) return;
+            if (!MonitoringAllowed() || tracker.Targets.Count == 0) return;
             var player = objects.LocalPlayer;
-            if (player is null || !player.IsValid() || player.IsDead || player.EntityId != trackedOwner) return;
+            if (player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead || player.EntityId != trackedOwner) return;
             var now = Now;
             var draw = ImGui.GetBackgroundDrawList();
             var lineColor = ImGui.ColorConvertFloat4ToU32(config.LineColor);

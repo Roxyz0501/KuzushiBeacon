@@ -1,5 +1,13 @@
 # Validation — 2026-10-18
 
+## 1.0.0.3 monitoring recovery fix
+
+- Confirmed code defect: reconciliation required LocalPlayer to exist and be SAM before subscribing; Update also permanently unsubscribed when LocalPlayer temporarily disappeared. No subsequent event was guaranteed to restart it.
+- Reproduced against the previous implementation using the actual Plugin and nullable public-service doubles: failed with `PvP entry with missing player must keep recovery callback`. After the fix, entry without a player, player disappearance/reappearance, and temporarily unavailable job resume enemy enumeration without another client event.
+- Monitoring lifecycle now depends only on enabled settings/login/PvP. Player validity and SAM job are per-frame scan/render gates, clearing the cache and skipping enemy reads while unavailable. No new task, timer, network access or outside-PvP polling.
+- 31 host lifecycle checks and 64 managed checks pass. After recovery and PvP exit, 600 host ticks cause zero player reads and there are zero update/overlay subscriptions. Other jobs have zero enemy/status enumeration; a local player readiness check remains active only inside PvP.
+- Local logs confirm the reported release loaded and a PvP entry occurred, without a logged overlay exception. They do not record LocalPlayer availability; attribution of the user's exact match failure to this defect remains unverified. No claim of live-game acceptance.
+
 ## 1.0.0.2 diagnostic release
 
 - Local game data confirms Status 3202 is Kuzushi. This does not establish the cause of the reported detection failure.
@@ -33,7 +41,7 @@ These are deterministic managed simulations, **not measurements inside FFXIV**. 
 
 | Scenario | Target | Simulation result / implementation evidence |
 | --- | --- | --- |
-| Outside PvP, UI closed | 0 scans; 0 status reads; no update/draw subscriptions | 36,000 inactive calls (10 minutes at 60 FPS): 0 reads. Plugin unsubscribes on exit/disable/job transition. |
+| Outside PvP, UI closed | 0 scans; 0 status reads; no update/draw subscriptions | 36,000 inactive calls (10 minutes at 60 FPS): 0 reads. Plugin unsubscribes on exit/disable; other jobs inside PvP skip enemy/status reads. |
 | 72 players, 100 ms checks | ≤10 scans/s; ≤720 status-list reads/s | 6,000 frames over 10 simulated seconds: 100 scans, 7,200 candidates, 7,200 status-list reads. Managed fake-world total elapsed 0.303 ms on this host; not a game CPU estimate. |
 | All candidates | ≤200 candidates/cache entries | 500 supplied candidates: 200 status reads, 200 cached targets. |
 | Repeated frame within interval | 0 additional status scans | 99 calls inside the first 100 ms produce no additional scan. |

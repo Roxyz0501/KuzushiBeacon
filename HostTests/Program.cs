@@ -21,7 +21,7 @@ foreach (var pvp in new[] { false, true })
     Check(host.ObjectReads == 0, "constructor must not read ObjectTable");
     Check(host.Queue.Count == 1, "exactly one initial framework dispatch");
     host.Drain();
-    Check(host.ObjectReads == (pvp ? 1 : 0), "PvP gate short circuits before ObjectTable");
+    Check(host.ObjectReads == 0, "PvP gate short circuits before ObjectTable");
     Check(host.Count("framework:Update") == (pvp ? 1 : 0), "monitor only subscribes inside PvP");
     Check(host.Count("ui:Draw") == (pvp ? 1 : 0), "overlay only subscribes inside PvP");
     host.Raise("client:Login");
@@ -49,11 +49,39 @@ foreach (var pvp in new[] { false, true })
     var host = new Host { Pvp = true, ThrowOnRead = true };
     var plugin = Task.Run(host.Load).GetAwaiter().GetResult();
     host.Drain();
+    host.Raise("framework:Update", host.Framework);
     SpinWait.SpinUntil(() => host.Errors == 1, 1000);
     Check(host.Errors == 1, "deferred failure is observed and logged");
     Check(host.Count("framework:Update") == 0 && host.Count("ui:Draw") == 0, "deferred failure stops monitor");
     plugin.Dispose();
     Check(host.TotalSubscriptions == 0, "failed deferred initialization stays disposable");
+}
+// Zone transitions can temporarily remove LocalPlayer without another client event.
+{
+    var host = new Host { Pvp = true, PlayerAvailable = false };
+    using var plugin = host.Load();
+    Check(host.Count("framework:Update") == 1, "PvP entry with missing player must keep recovery callback");
+    host.Raise("framework:Update", host.Framework);
+    host.PlayerAvailable = true;
+    host.Raise("framework:Update", host.Framework);
+    Check(host.ValidityReads == 1 && host.PlayerEnumerations == 1, "player returning without another event resumes detection");
+    host.PlayerAvailable = false;
+    host.Raise("framework:Update", host.Framework);
+    host.PlayerAvailable = true;
+    host.Raise("framework:Update", host.Framework);
+    Check(host.ValidityReads == 2 && host.PlayerEnumerations == 2, "temporary player disappearance must not permanently stop detection");
+    host.Job = 0;
+    host.Raise("framework:Update", host.Framework);
+    Check(host.PlayerEnumerations == 2, "unavailable job never scans enemies");
+    host.Job = Rules.SamuraiJob;
+    host.Raise("framework:Update", host.Framework);
+    Check(host.PlayerEnumerations == 3, "job availability resumes scan without a new event");
+    host.Pvp = false;
+    host.Raise("client:LeavePvP");
+    var reads = host.ObjectReads;
+    for (var i = 0; i < 600; i++) host.Raise("framework:Update", host.Framework);
+    Check(host.ObjectReads == reads && host.Count("framework:Update") == 0 && host.Count("ui:Draw") == 0,
+        "recovery callback stops outside PvP with zero player reads");
 }
 Console.WriteLine($"PASS {checks} host lifecycle checks (real Plugin + thread-enforcing service doubles).");
 
@@ -66,6 +94,10 @@ sealed class Host
     public Queue<(Action Action, TaskCompletionSource Completion)> Queue { get; } = [];
     public bool Pvp;
     public bool ThrowOnRead;
+    public bool PlayerAvailable = true;
+    public int ValidityReads;
+    public int PlayerEnumerations;
+    public uint Job = Rules.SamuraiJob;
     public int ObjectReads;
     public int IllegalReads;
     public int Errors;
@@ -126,8 +158,11 @@ sealed class Host
                 if (Environment.CurrentManagedThreadId != mainThread) { IllegalReads++; throw new InvalidOperationException("Not on main thread!"); }
                 ObjectReads++;
                 if (ThrowOnRead) throw new InvalidOperationException("Simulated host failure");
-                return player ??= Stub(method.ReturnType, "player");
-            case "get_ClassJob": return new RowRef<ClassJob>(null!, Rules.SamuraiJob, null);
+                return PlayerAvailable ? player ??= Stub(method.ReturnType, "player") : null;
+            case "IsValid": ValidityReads++; return true;
+            case "get_EntityId": return 123u;
+            case "get_PlayerObjects": PlayerEnumerations++; return Array.Empty<Dalamud.Game.ClientState.Objects.Types.IBattleChara>();
+            case "get_ClassJob": return new RowRef<ClassJob>(null!, Job, null);
             case "Error": Interlocked.Increment(ref Errors); return null;
         }
         return method.ReturnType == typeof(void) ? null
