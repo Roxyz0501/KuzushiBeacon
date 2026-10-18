@@ -190,6 +190,41 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     var bounded = Enumerable.Range(2, 201).Select(i => C(i, i == 202 ? 1u : 100u, 1));
     Check(LowHpTarget.Find(bounded, 1, Vector3.Zero, 0, 3)?.Actor.EntityId == 2, "low HP enumeration capped at 200");
 }
+
+{
+    var options=new SupportOptions();
+    Check(!options.NeedsMonitor, "default support switches require no background scan");
+    Check(SupportOptions.JobRange(34,3,20)==3 && SupportOptions.JobRange(41,3,20)==3 && SupportOptions.JobRange(19,3,20)==3,"melee and tanks use 3m");
+    Check(SupportOptions.JobRange(23,3,20)==20 && SupportOptions.JobRange(24,3,20)==20 && SupportOptions.JobRange(42,3,20)==20,"ranged and healers use 20m");
+    Check(FeatureCatalog.All.Select(f=>f.Id).Distinct().Count()==FeatureCatalog.All.Length,"unique feature switches");
+    foreach(var id in Enumerable.Range(16,60).Concat(Enumerable.Range(77,24)))
+        Check(FeatureCatalog.All.Any(f=>f.Id==id),"requested feature has a switch: "+id);
+    options.Features.Add(46);Check(options.NeedsMonitor,"survival feature requests monitoring");
+    options.DisabledGroups.Add(3);Check(!options.On(46)&&!options.NeedsMonitor,"category disable stops its work");
+    options.DisabledGroups.Clear();options.Features.Add(77);options.SmallFeatures=[];options.LargeFeatures=[46];
+    Check(!options.On(46)&&options.On(46,true)&&!options.NeedsMonitor,"inactive profile does not scan");
+    options.CurrentLarge=true;Check(options.NeedsMonitor&&options.On(46),"active profile enables monitoring and command conditions");
+    var config=new Configuration {LowHpRange=5};config.Sanitize();Check(config.Support.MeleeRange==5&&config.Support.RangedRange==20,"legacy range migration preserves custom melee range");
+    config.Support.Features.Add(99);var saved=JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(config))!;
+    Check(saved.Support.On(99)&&saved.Support.MeleeRange==5,"feature options persist");
+    options.Volume=float.NaN;options.MaxActors=int.MaxValue;options.UpdateMs=-1;options.Sanitize();
+    Check(options.Volume==.25f&&options.MaxActors==200&&options.UpdateMs==50,"invalid settings bounded");
+    var latch=new AlertLatch();
+    Check(!latch.Observe(1,true,0,.5)&&!latch.Observe(1,true,.4,.5)&&latch.Observe(1,true,.5,.5),"stable condition fires once after dwell");
+    Check(!latch.Observe(1,true,5,.5),"continuous condition never repeats");
+    latch.Observe(1,false,6,.5);Check(!latch.Observe(1,true,7,.5)&&latch.Observe(1,true,7.5,.5),"condition rearms after loss");
+    Observation O(int id,float x,uint hp,bool enemy=true)=>new(new(id,(uint)id,(ulong)id,new(x,0,0),true,true),hp,100,.5f,enemy,!enemy,0,2,0,false,false,0,false);
+    var crowd=new[]{O(2,0,80),O(3,4,20),O(4,5.01f,10),O(5,1,5,false)};
+    var coverage=SupportMath.Count(crowd[0],crowd,5,30);
+    Check(coverage.Count==2&&coverage.LowCount==1,"area geometry excludes allies and counts HP threshold");
+    Check(crowd[1].Distance(Vector3.Zero,.5f)==3,"hitbox adjusted displayed distance");
+    Check(!(crowd[0] with{Guard=true}).Eligible(true,false)&&!(crowd[0] with{Invulnerable=true}).Eligible(false,true),"independent status exclusions");
+    var w=new FakeWorld();foreach(var o in crowd.Where(o=>o.Enemy)){w.Actors.Add(o.Actor);w.Statuses[o.Actor.Index]=(3202,1,2);}
+    var a=new FakeAction();
+    Check(!Zantetsuken.Execute(true,1,Vector3.Zero,0,w,a,4)&&a.Attempts==0,"minimum coverage blocks native request");
+    Check(!Zantetsuken.Execute(true,1,Vector3.Zero,0,w,a,2,x=>x.EntityId!=3)&&a.Attempts==0,"excluded victim is not counted");
+    Check(Zantetsuken.Execute(true,1,Vector3.Zero,0,w,a,1,x=>x.EntityId!=3)&&a.Last?.EntityId!=3,"excluded center is not selected");
+}
 Console.WriteLine($"PASS {checks} checks; localization complete for {Loc.Languages.Length} languages.");
 
 sealed class FakeWorld : IHighlightWorld

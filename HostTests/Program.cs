@@ -112,6 +112,19 @@ foreach (var pvp in new[] { false, true })
     host.Commands["/pvplowhp"].Handler("/pvplowhp", "");
     Check(host.ObjectReads == 0 && host.PlayerEnumerations == 0, "low HP command outside PvP has no object reads");
 }
+{
+    var host = new Host { Pvp = false };
+    host.Config.Support.Features=FeatureCatalog.All.Select(f=>f.Id).ToHashSet();
+    using var plugin=host.Load();
+    foreach(var cmd in new[]{"/pvplowhp","/pvplowhp3","/pvplowhp5","/pvplowhp20","/pvpnearest","/pvpally","/pvptrack","/pvpassist","/pvpztarget"})
+    {
+        Check(host.Commands.ContainsKey(cmd),"new macro registered: "+cmd);
+        typeof(Plugin).GetField("nextLowHpCommand",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(plugin,0d);
+        host.Commands[cmd].Handler(cmd,"");
+    }
+    for(int i=0;i<600;i++)host.Raise("framework:Update",host.Framework);
+    Check(host.ObjectReads==0&&host.PlayerEnumerations==0&&host.Errors==0,"all features and commands outside PvP perform zero object reads without hidden initialization errors");
+}
 Console.WriteLine($"PASS {checks} host lifecycle checks (real Plugin + thread-enforcing service doubles).");
 
 sealed class Host
@@ -122,6 +135,7 @@ sealed class Host
     private object? player;
     public Queue<(Action Action, TaskCompletionSource Completion)> Queue { get; } = [];
     public readonly Dictionary<string, CommandInfo> Commands = [];
+    public Configuration Config=new(){Language="ja"};
     public bool Pvp;
     public bool ThrowOnRead;
     public bool PlayerAvailable = true;
@@ -136,7 +150,7 @@ sealed class Host
     public Host() => Framework = Stub<IFramework>("framework");
     public Plugin Load() => new(Stub<IDalamudPluginInterface>("pi"), Stub<IClientState>("client"),
         Stub<IObjectTable>("objects"), Framework, Stub<IGameGui>("gui"),
-        Stub<ICommandManager>("commands"), Stub<IPluginLog>("log"), Stub<ITargetManager>("targets"), Stub<IChatGui>("chat"));
+        Stub<ICommandManager>("commands"), Stub<IPluginLog>("log"), Stub<ITargetManager>("targets"), Stub<IChatGui>("chat"), Stub<IPlayerState>("playerState"), Stub<IDutyState>("duty"), Stub<IDataManager>("data"), Stub<IGameInteropProvider>("interop"));
     public int Count(string key) => events.TryGetValue(key, out var list) ? list.Count : 0;
     public int TotalSubscriptions => events.Values.Sum(x => x.Count);
     public void Raise(string key, params object?[] args)
@@ -175,7 +189,8 @@ sealed class Host
             case "Print": ChatMessages++; return null;
             case "AddHandler": Commands.Add((string)args[0]!, (CommandInfo)args[1]!); return true;
             case "RemoveHandler": return Commands.Remove((string)args[0]!);
-            case "GetPluginConfig": return new Configuration { Language = "ja" };
+            case "GetPluginConfig": return Config;
+            case "GetPluginConfigDirectory": return Path.GetFullPath("artifacts/host-config");
             case "get_UiLanguage": return "en";
             case "get_ClientLanguage": return ClientLanguage.Japanese;
             case "get_IsLoggedIn": return true;

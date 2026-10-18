@@ -1,3 +1,27 @@
+# 1.1.0.0 expansion validation — 2026-10-19
+
+## Executed
+
+- Managed feature/regression suite: **206 checks PASS**. Job ranges, migration, active content profiles, individual/group switches, stable alert edges/rearming, hitbox distance, area/low-HP counting, minimum LB coverage and exclusions, plus existing source-ID/gauge/request-gate tests.
+- Host lifecycle suite: **48 checks PASS** using the real Plugin constructor and thread-enforcing doubles. All new targeting commands registered; all features enabled outside PvP still produce zero object reads/enumerations and no hidden initialization errors. Leave/unload removes callbacks; missing local player recovery preserved.
+- Integrated Ledger suite: **2,781 checks PASS** against this assembly. Result parsing, observed/official KDA separation, inference replay, retention/page caches, character isolation, CSV escaping, DPAPI, durable duplicate delivery prevention. HTTP is a fake handler; no actual Discord messages sent.
+- Ledger I/O measured: first page 25 summary reads, cached opens +0 reads/+0 writes/+0 bytes, concurrent new page +25 reads, detail +1 read. Test summary bytes 8,700; 60 saved matches generated 120 file writes. 2,000 inference cases: 16.3 ms in this run (test host, not gameplay).
+- Headless production UI: **44 frames PASS**. Eight category panels in Japanese/English, real main settings and a synthetic support HUD. Zero config writes during unchanged rendering. All generated support glyphs present in all four regional host font faces. Local artifacts under artifacts/ui-final-1100 (ignored by Git).
+- Release build: zero warnings/errors. Common StandardPluginTabs.cs unchanged. Package has the explicit eight-file allowlist, including both integrated license notices; no host DLLs, player records, webhook data or test artifacts.
+
+## Inspection / operational boundaries
+
+- Every gameplay command checks PvP and alive local player before scanning; 200-candidate cap; final identity/target eligibility/range checks. Target/UseAction calls are only in explicit command handlers. Existing request latch protects ambiguous native requests from resending.
+- Zantetsuken geometry is behind full-LB checks. General AoE is a separate opt-in analysis. Draw reads cached coverage; it never invokes area search or UseAction. When support scanning is active, legacy Kuzushi tracking uses the shared value snapshot and LB coverage result.
+- Local audio uses bounded PCM and per-sample volume, no game mixer modification. Notification priorities are applied after evaluating the batch; stable conditions and cooldowns prevent repeated notification.
+- New feature controls are Japanese/English; other common language selections use English for new controls. Existing and integrated Ledger strings retain seven-language coverage.
+- Native action/readiness, status IDs/ownership, incoming result signatures and real scene rendering were **not exercised in the live game**. No assertion of actual kills, accurate hit outcomes, safe routes or live CPU timings is made. Test timing is not gameplay performance evidence.
+- Range/invulnerability tables are explicit and limited. Current local sheets checked Guard 3054/3673, Kuzushi 3202, Chiten 1240, Resilience 3248, Undead Redemption 3039; Guard 29054, Purify 29056, Elixir 29055, Recuperate 29711 / 2000 MP. Unknown effects are not inferred.
+- Incoming result code is copied from the user's PvP Ledger with its build guard and upstream notices. It observes only; no outbound packet API, packet construction, bypass or resource writes were added.
+- Published ZIP/index verification is recorded in PUBLICATION_STATE.md after publication. Installed plugin files are not replaced with unpublished builds.
+
+---
+
 # Validation — 2026-10-19
 
 ## 1.0.0.7 PvP Supporter rename, low-HP target, request latch and visible count

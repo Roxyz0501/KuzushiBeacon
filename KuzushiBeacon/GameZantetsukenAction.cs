@@ -11,6 +11,11 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
     ITargetManager targets, IHighlightWorld world) : IZantetsukenAction
 {
     public RequestGate Gate { get; } = new();
+    public SupportOptions? Options { get; set; }
+    public bool TargetOnly { get; set; }
+    public Actor? LastSelection { get; private set; }
+    public bool Included(Actor candidate) => Resolve(candidate) is IBattleChara actor
+        && !StatusRules.Excluded(actor, Options?.ZantetsukenExcludeGuard == true, Options?.ZantetsukenExcludeInvulnerable == true);
 
     private IGameObject? Resolve(Actor candidate)
     {
@@ -33,6 +38,7 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
     // Display depends on gauge fullness and reach, not temporary cast/animation locks.
     public bool CanReach(Actor candidate)
     {
+        if (!Included(candidate)) return false;
         var actor = Resolve(candidate);
         var player = objects.LocalPlayer;
         return actor is not null && player is not null && player.IsValid()
@@ -42,6 +48,8 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
 
     public bool CanUse(Actor candidate)
     {
+        if (!Included(candidate)) return false;
+        if (TargetOnly) return CanReach(candidate);
         var actor = Resolve(candidate);
         var manager = ActionManager.Instance();
         var player = objects.LocalPlayer;
@@ -61,6 +69,9 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
         if (world.OwnKuzushiRemaining(candidate.Index, owner) <= 0 || !CanUse(candidate)) return false;
         var actor = Resolve(candidate);
         if (actor is null) return false;
+        LastSelection = candidate;
+        if (Options?.On(99) == true) return true;
+        if (TargetOnly) { targets.Target = actor; return true; }
         if (!Gate.Begin(System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency)) return false;
         targets.Target = actor;
         // Same normal execution mode as a hotbar button press; client handles queueing/checks.

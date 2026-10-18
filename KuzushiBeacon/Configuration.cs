@@ -9,6 +9,8 @@ public sealed class Configuration : IPluginConfiguration
     public int Version { get; set; } = 1;
     public string? Language { get; set; }
     public bool Enabled = true;
+    public SupportOptions Support = new();
+    public Ledger.Configuration Ledger = new();
     public float LowHpRange = 3f;
     public bool ShowLine = true;
     public bool ShowMarker = true;
@@ -36,6 +38,9 @@ public sealed class Configuration : IPluginConfiguration
 
     public void Sanitize()
     {
+        Support ??= new();
+        if(Version<2){Support.MeleeRange=Clamp(LowHpRange,1,50,3);Version=2;}
+        Support.Sanitize(); Ledger ??= new(); Ledger.Sanitize();
         LowHpRange = Clamp(LowHpRange, 1, 50, 3);
         CountColor = Color(CountColor);
         CountSize = Clamp(CountSize, 12, 96, 32);

@@ -9,7 +9,7 @@ using Roxyz0501.Dalamud.CommonUi;
 
 namespace KuzushiBeacon;
 
-public sealed class Plugin : IDalamudPlugin
+public sealed partial class Plugin : IDalamudPlugin
 {
     private const string SettingsAlias = "/pvpsupporter";
     private const string LowHpCommand = "/pvplowhp";
@@ -54,8 +54,10 @@ public sealed class Plugin : IDalamudPlugin
     private static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
     public Plugin(IDalamudPluginInterface pi, IClientState client, IObjectTable objects,
-        IFramework framework, IGameGui gui, ICommandManager commands, IPluginLog log, ITargetManager targets, IChatGui chat)
+        IFramework framework, IGameGui gui, ICommandManager commands, IPluginLog log, ITargetManager targets, IChatGui chat,
+        IPlayerState playerState, IDutyState duty, IDataManager data, IGameInteropProvider interop)
     {
+        this.playerState = playerState; this.duty = duty; this.data = data; this.interop = interop;
         this.targets = targets;
         this.chat = chat;
         this.pi = pi;
@@ -70,6 +72,7 @@ public sealed class Plugin : IDalamudPlugin
         zantetsukenAction = new GameZantetsukenAction(client, objects, targets, world);
         config = pi.GetPluginConfig() as Configuration ?? new Configuration();
         config.Sanitize();
+        zantetsukenAction.Options = config.Support;
         ClientLanguage? game;
         try { game = client.ClientLanguage; } catch { game = null; }
         Loc.CheckCompleteness();
@@ -77,10 +80,14 @@ public sealed class Plugin : IDalamudPlugin
         commandInfo = new CommandInfo((_, _) => Open()) { HelpMessage = T("CommandHelp") };
         commands.AddHandler(Command, commandInfo);
         commands.AddHandler(SettingsAlias, commandInfo);
-        lowHpCommandInfo = new CommandInfo((command, args) => { if (string.IsNullOrWhiteSpace(args)) _ = SelectLowHpAsync(); }) { HelpMessage = T("LowHpHelp") };
+        lowHpCommandInfo = new CommandInfo((command, args) => _ = SelectSupportTargetAsync(command, args)) { HelpMessage = T("LowHpHelp") };
         commands.AddHandler(LowHpCommand, lowHpCommandInfo);
         executeCommandInfo = new CommandInfo((_, args) => { if (string.IsNullOrWhiteSpace(args)) ExecuteZantetsuken(); }) { HelpMessage = T("ExecuteHelp") };
         commands.AddHandler(ExecuteCommand, executeCommandInfo);
+        RegisterSupportCommands();
+        duty.DutyStarted += SupportDutyStarted;
+        duty.DutyRecommenced += SupportDutyStarted;
+        duty.DutyCompleted += SupportDutyEnded;
         client.TerritoryChanged += TerritoryChanged;
         client.ClassJobChanged += JobChanged;
         client.EnterPvP += Reconcile;
@@ -92,24 +99,9 @@ public sealed class Plugin : IDalamudPlugin
         Reconcile();
     }
 
-    private async Task SelectLowHpAsync()
-    {
-        var requested = Now;
-        try
-        {
-            await framework.RunOnFrameworkThread(() =>
-            {
-                if (disposed || Now - requested > 0.5 || Now < nextLowHpCommand) return;
-                nextLowHpCommand = Now + 0.25;
-                if (!lowHpTarget.Select(config.LowHpRange) && messages.Message(Now)) chat.Print(T("LowHpUnavailable"));
-            });
-        }
-        catch (Exception ex) { if (messages.Message(Now)) log.Error(ex, "Lowest-HP target selection failed."); }
-    }
-
     private void ExecuteZantetsuken() => _ = ExecuteZantetsukenAsync();
 
-    private async Task ExecuteZantetsukenAsync()
+    private async Task ExecuteZantetsukenAsync(bool targetOnly = false)
     {
         var requestedAt = Now;
         try
@@ -118,17 +110,24 @@ public sealed class Plugin : IDalamudPlugin
             {
                 if (disposed || Now - requestedAt > 0.5 || Now < nextCommand || zantetsukenAction.Gate.Pending) return;
                 nextCommand = Now + 0.25;
-                if (!client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable(); return; }
+                if (!config.Enabled || S.DisabledGroups.Contains(2) || !client.IsLoggedIn || !client.IsPvPExcludingDen || targetOnly && !On(42)) { CommandUnavailable(); return; }
                 var player = objects.LocalPlayer;
                 if (player is null || !player.IsValid() || player.IsDead || player.ClassJob.RowId != Rules.SamuraiJob)
                 { CommandUnavailable(); return; }
+                if (!GameZantetsukenAction.IsLimitBreakFull()) { CountCommand(targetOnly?"ztarget":"zantetsuken",false,"LB not full"); CommandUnavailable(); return; }
+                zantetsukenAction.TargetOnly = targetOnly;
                 try
                 {
-                    if (!Zantetsuken.Execute(true, player.EntityId, player.Position, targets.Target?.GameObjectId ?? 0,
-                        world, zantetsukenAction)) CommandUnavailable();
+                    var reason="";
+                    var success = Zantetsuken.Execute(true, player.EntityId, player.Position, targets.Target?.GameObjectId ?? 0,
+                        world, zantetsukenAction, On(43)?S.MinimumZantetsuken:1, zantetsukenAction.Included,r=>reason=r);
+                    CountCommand(targetOnly?"ztarget":"zantetsuken",success,reason);
+                    if (!success) CommandUnavailable();
+                    else if(On(99) && messages.Message(Now))chat.Print(L("検証：斬鉄剣の候補を選択しました（操作なし）","Dry run: selected a Zantetsuken candidate; no action performed."));
                 }
                 finally
                 {
+                    zantetsukenAction.TargetOnly = false;
                     if (zantetsukenAction.Gate.Pending && !observingRequest)
                     { framework.Update += ObserveRequest; observingRequest = true; }
                 }
@@ -172,7 +171,7 @@ public sealed class Plugin : IDalamudPlugin
         ImGui.SetNextItemWidth(-1);
         return "###" + key;
     }
-    private bool MonitoringAllowed() => !disposed && !faulted && config.Enabled && (config.ShowLine || config.ShowMarker || config.ShowMaxCount)
+    private bool MonitoringAllowed() => !disposed && !faulted && config.Enabled && ((!S.DisabledGroups.Contains(2) && (config.ShowLine || config.ShowMarker || config.ShowMaxCount)) || S.NeedsMonitor)
         && client.IsLoggedIn && client.IsPvPExcludingDen;
 
     private void Reconcile() => _ = ReconcileAsync();
@@ -187,6 +186,7 @@ public sealed class Plugin : IDalamudPlugin
             await framework.RunOnFrameworkThread(() =>
             {
                 if (disposed) return; // Unloaded before the queued first tick.
+                ReconcileLedger();
                 if (!MonitoringAllowed()) { Stop(); return; }
                 if (subscribed) return;
                 tracker.Clear();
@@ -209,6 +209,7 @@ public sealed class Plugin : IDalamudPlugin
             pi.UiBuilder.Draw -= DrawOverlay;
             subscribed = false;
         }
+        ClearSupport();
         tracker.Clear();
         maximumCount = 0;
         countExpiresAt = 0;
@@ -216,9 +217,9 @@ public sealed class Plugin : IDalamudPlugin
         trackedOwner = 0;
     }
 
-    private void TerritoryChanged(uint _) { ResetRequest(); Stop(); Reconcile(); }
+    private void TerritoryChanged(uint _) { reviewCompleted=false; FinishReview(); ResetRequest(); Stop(); Reconcile(); }
     private void JobChanged(uint _) { Stop(); Reconcile(); }
-    private void Logout(int _, int __) { ResetRequest(); Stop(); }
+    private void Logout(int _, int __) { FinishReview(); ResetRequest(); Stop(); }
 
     private void Fail(Exception ex)
     {
@@ -232,10 +233,11 @@ public sealed class Plugin : IDalamudPlugin
         try
         {
             if (!MonitoringAllowed()) { Stop(); return; }
+            SupportUpdate(Now);
             // LocalPlayer can disappear during zoning. Keep the PvP callback alive
             // so detection resumes without requiring another client-state event.
             var player = objects.LocalPlayer;
-            if (player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead)
+            if (S.DisabledGroups.Contains(2) || player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead)
             {
                 tracker.Clear();
                 maximumCount = 0;
@@ -247,7 +249,8 @@ public sealed class Plugin : IDalamudPlugin
             var now = Now;
             // Reuse one bounded scan for both overlays. Count must not depend on highlight distance.
             tracker.Update(true, now, player.EntityId, player.Position,
-                config.ShowMaxCount ? float.MaxValue : config.MaxDistance, config.ScanIntervalMs, world);
+                config.ShowMaxCount ? float.MaxValue : config.MaxDistance, sharedSnapshot ? Math.Clamp(S.UpdateMs,50,500) : config.ScanIntervalMs,
+                sharedSnapshot ? new SnapshotWorld(observations,player.EntityId,now-supportAt) : world);
             if (previousScan == tracker.ScanCount) return;
             maximumCount = 0;
             countExpiresAt = 0;
@@ -257,11 +260,11 @@ public sealed class Plugin : IDalamudPlugin
                 countExpiresAt = double.MaxValue;
                 foreach (var target in tracker.Targets)
                 {
-                    if (now >= target.ExpiresAt) continue;
-                    countCandidates.Add(target.Actor);
+                    if (now >= target.ExpiresAt || !sharedSnapshot && !zantetsukenAction.Included(target.Actor)) continue;
+                    if(!sharedSnapshot)countCandidates.Add(target.Actor);
                     countExpiresAt = Math.Min(countExpiresAt, target.ExpiresAt);
                 }
-                maximumCount = Zantetsuken.FindBest(countCandidates, player.Position,
+                maximumCount = sharedSnapshot ? supportLbCount : Zantetsuken.FindBest(countCandidates, player.Position,
                     targets.Target?.GameObjectId ?? 0, zantetsukenAction.CanReach).Count;
             }
         }
@@ -272,7 +275,8 @@ public sealed class Plugin : IDalamudPlugin
     {
         try
         {
-            if (!MonitoringAllowed() || tracker.Targets.Count == 0) return;
+            DrawSupportOverlay();
+            if (!MonitoringAllowed() || S.DisabledGroups.Contains(2) || tracker.Targets.Count == 0) return;
             var player = objects.LocalPlayer;
             if (player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead || player.EntityId != trackedOwner) return;
             var now = Now;
@@ -359,13 +363,15 @@ public sealed class Plugin : IDalamudPlugin
 
     private void DrawSettingsWindow()
     {
+        ledger?.SetVisible(false);
         using var font = fonts!.Push(config.Language);
-        ImGui.SetNextWindowSize(new Vector2(680, 650), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new Vector2(1120, 780), ImGuiCond.FirstUseEver);
         ImGui.SetNextWindowSizeConstraints(new Vector2(470, 350), new Vector2(float.MaxValue));
         if (ImGui.Begin("PvP Supporter###KuzushiBeacon", ref open))
         {
-            if (ImGui.BeginTabBar("KuzushiBeaconTabs"))
+            if (ImGui.BeginTabBar("KuzushiBeaconTabs", ImGuiTabBarFlags.FittingPolicyScroll))
             {
+                DrawFeatureTabs();
                 StandardPluginTabs.DrawStandardTrailingTabs(T("Settings"), "Settings", DrawSettings,
                     T("LanguageSettings"), DrawLanguage, T("Support"), DrawSupport);
                 ImGui.EndTabBar();
@@ -373,28 +379,27 @@ public sealed class Plugin : IDalamudPlugin
         }
         ImGui.End();
         if (dirty && (Now >= saveAfter || !open)) Save();
-        if (!open) pi.UiBuilder.Draw -= DrawSettingsWindow;
+        if (!open) { ledger?.SetVisible(false); pi.UiBuilder.Draw -= DrawSettingsWindow; }
     }
 
     private void DrawSettings()
     {
         ImGui.TextWrapped(T("Explanation"));
-        ImGui.TextWrapped(T("ExecuteHelp"));
-        ImGui.TextWrapped(T("LowHpHelp"));
         ImGui.TextWrapped(T(faulted ? "Faulted" : subscribed ? "Active" : "Idle"));
-        ImGui.TextWrapped(T("DetectionMetrics"));
-        ImGui.TextWrapped(string.Format(T("DetectionMetricsValue"), tracker.ScanCount, tracker.CandidateReads,
-            tracker.StatusListReads, tracker.Targets.Count, drawnLines, drawnMarkers, projectionFailures));
-        ImGui.TextWrapped(string.Format(T("StatusDiagnostics"), world.KuzushiSeen,
-            world.OwnSourceSeen, world.InvalidOwnDurationSeen));
-        bool changed = false;
-        if (ImGui.Checkbox(Label("Enabled"), ref config.Enabled))
+        if(ImGui.Checkbox(Label("Enabled"), ref config.Enabled)){faulted=false;MarkDirty();}
+        if(ImGui.Button(L("支援機能を全てオン（検証モードを除く）","Enable all support features (except dry run)")))
+        {config.Enabled=true;S.Features=FeatureCatalog.All.Where(f=>f.Id!=99).Select(f=>f.Id).ToHashSet();S.DisabledGroups.Clear();MarkDirty();}
+        if(ImGui.Button(L("支援機能を全てオフ","Disable all support features")))
+        {config.Enabled=false;S.Features.Clear();config.ShowLine=config.ShowMarker=config.ShowMaxCount=false;MarkDirty();}
+        if(ImGui.Checkbox(L("通知をまとめてオン","Enable all notifications"),ref S.Notifications))MarkDirty();
+        if(ImGui.Checkbox(L("SEをまとめてオン","Enable notification audio"),ref S.Sound))MarkDirty();
+        ImGui.TextWrapped(L("設定は左側のジャンルタブに分かれています。無効な機能の通知は発生しません。","Settings are organized in the category tabs. Disabled features do not notify."));
+    }
+    private void DrawLegacy(int section)
+    {
+        bool changed=false;
+        if(section==2)
         {
-            faulted = false;
-            changed = true;
-        }
-        changed |= ImGui.SliderFloat(Control("LowHpRange"), ref config.LowHpRange, 1, 50, "%.1f m");
-        ImGui.Separator();
         changed |= ImGui.Checkbox(Label("ShowLine"), ref config.ShowLine);
         changed |= ImGui.ColorEdit4(Control("LineColor"), ref config.LineColor, ImGuiColorEditFlags.AlphaBar);
         changed |= ImGui.SliderFloat(Control("LineWidth"), ref config.LineWidth, 0.5f, 5f, "%.1f px");
@@ -418,10 +423,6 @@ public sealed class Plugin : IDalamudPlugin
         changed |= ImGui.SliderFloat(Control("MarkerHeight"), ref config.MarkerHeight, 1f, 5f, "%.1f m");
         ImGui.TextWrapped(T("HeightHelp"));
         ImGui.Separator();
-        changed |= ImGui.SliderFloat(Control("Distance"), ref config.MaxDistance, 5f, 100f, "%.0f m");
-        changed |= ImGui.SliderInt(Control("Interval"), ref config.ScanIntervalMs, 50, 500, "%d ms");
-        ImGui.TextWrapped(T("PerformanceHelp"));
-        if (changed) { config.Sanitize(); MarkDirty(); }
         ImGui.Separator();
         ImGui.TextUnformatted(T("Preview"));
         var start = ImGui.GetCursorScreenPos();
@@ -437,8 +438,16 @@ public sealed class Plugin : IDalamudPlugin
         if (config.ShowLine) draw.AddLine(from, to, ImGui.ColorConvertFloat4ToU32(config.LineColor), config.LineWidth);
         if (config.ShowMarker) DrawMarker(draw, to - new Vector2(0, 8), Math.Min(22, config.MarkerSize),
             ImGui.ColorConvertFloat4ToU32(config.MarkerColor), config.MarkerColor.W);
+        }
+        if(section==7)
+        {
+        changed |= ImGui.SliderFloat(Control("Distance"), ref config.MaxDistance, 5f, 100f, "%.0f m");
+        changed |= ImGui.SliderInt(Control("Interval"), ref config.ScanIntervalMs, 50, 500, "%d ms");
+        ImGui.TextWrapped(T("PerformanceHelp"));
         ImGui.TextWrapped(string.Format(T("Metrics"), tracker.ScanCount, tracker.CandidateReads,
             tracker.StatusListReads, tracker.LastScanMs));
+        }
+        if(changed){config.Sanitize();MarkDirty();}
     }
 
     private void DrawLanguage()
@@ -458,9 +467,17 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        FinishReview();
         disposed = true;
+        ledger?.Dispose(); ledger=null;
+        foreach(var name in supportCommands)commands.RemoveHandler(name);
+        localSound.Dispose();
+        reviewWrite.GetAwaiter().GetResult();
         ResetRequest();
         Stop();
+        duty.DutyStarted -= SupportDutyStarted;
+        duty.DutyRecommenced -= SupportDutyStarted;
+        duty.DutyCompleted -= SupportDutyEnded;
         client.TerritoryChanged -= TerritoryChanged;
         client.ClassJobChanged -= JobChanged;
         client.EnterPvP -= Reconcile;

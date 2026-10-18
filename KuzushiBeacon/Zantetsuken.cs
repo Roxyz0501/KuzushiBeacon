@@ -15,9 +15,10 @@ public static class Zantetsuken
 
     // A fresh, bounded snapshot per explicit invocation, independent of overlay settings/cache.
     public static bool Execute(bool allowed, uint owner, Vector3 origin, ulong currentTarget,
-        IHighlightWorld world, IZantetsukenAction action)
+        IHighlightWorld world, IZantetsukenAction action, int minimum = 1, Func<Actor,bool>? include = null, Action<string>? failure = null)
     {
-        if (!allowed || !Rules.ValidId(owner) || !Finite(origin)) return false;
+        bool Fail(string reason){failure?.Invoke(reason);return false;}
+        if (!allowed || !Rules.ValidId(owner) || !Finite(origin)) return Fail("conditions");
         var candidates = new List<Actor>();
         int visited = 0;
         foreach (var actor in world.Players)
@@ -25,11 +26,15 @@ public static class Zantetsuken
             if (visited++ >= Tracker.MaxCandidates) break;
             if (!Rules.ValidId(actor.EntityId) || actor.EntityId == owner || !actor.Alive
                 || !actor.Targetable || !Finite(actor.Position)) continue;
+            if (include != null && !include(actor)) continue;
             var remaining = world.OwnKuzushiRemaining(actor.Index, owner);
             if (float.IsFinite(remaining) && remaining > 0) candidates.Add(actor);
         }
         var selection = FindBest(candidates, origin, currentTarget, action.CanUse);
-        return selection.Target is { } selected && action.TryExecute(selected, owner);
+        if(candidates.Count==0)return Fail("no eligible Kuzushi");
+        if(selection.Target is not {} selected)return Fail("range, LoS or action unavailable");
+        if(selection.Count<minimum)return Fail("minimum coverage");
+        return action.TryExecute(selected,owner)||Fail("action rejected");
     }
 
     public static (Actor? Target, int Count) FindBest(IReadOnlyList<Actor> candidates, Vector3 origin,

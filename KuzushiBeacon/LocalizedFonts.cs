@@ -8,7 +8,7 @@ internal sealed class LocalizedFonts : IDisposable
     private readonly IFontHandle[] fonts;
     public LocalizedFonts(IFontAtlas atlas)
     {
-        var glyphs = (Loc.FontText + new string(Enumerable.Range(32, 95).Select(x => (char)x).ToArray())).ToGlyphRange();
+        var glyphs = (Loc.FontText + FeatureCatalog.FontText + SupportGlyphs.Text + new string(Enumerable.Range(32, 95).Select(x => (char)x).ToArray())).ToGlyphRange();
         fonts = Enumerable.Range(0, 4).Select(face => atlas.NewDelegateFontHandle(step => step.OnPreBuild(tk =>
             tk.AddDalamudAssetFont(DalamudAsset.NotoSansCjkRegular,
                 new SafeFontConfig { SizePx = 17, FontNo = face, GlyphRanges = glyphs })))).ToArray();

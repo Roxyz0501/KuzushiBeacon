@@ -10,7 +10,7 @@ if ($manifest.InternalName -ne 'KuzushiBeacon' -or $manifest.Author -ne 'Roxyz05
     throw 'Invalid package identity or URLs'
 }
 $zipPath = Join-Path $dist ('KuzushiBeacon-' + $manifest.AssemblyVersion + '.zip')
-$allowlist = @('KuzushiBeacon.dll', 'KuzushiBeacon.deps.json', 'KuzushiBeacon.json', 'LICENSE', 'NOTICE', 'images/icon.png')
+$allowlist = @('KuzushiBeacon.dll', 'KuzushiBeacon.deps.json', 'KuzushiBeacon.json', 'LICENSE', 'NOTICE', 'Ledger-LICENSE.txt', 'PvpStats-LICENSE.txt', 'images/icon.png')
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
