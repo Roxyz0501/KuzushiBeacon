@@ -39,6 +39,51 @@ internal static unsafe class Program
      Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,$"category-{g}-{language}.bmp"));
     }
    }
+   foreach(var enabled in new[]{false,true})
+   foreach(var language in new[]{"ja","en"})
+   {
+    UiStub.Config.Language=language;UiStub.Config.Support.SetAllFeatures(enabled);UiStub.Config.Support.Sound=enabled;
+    UiStub.Config.ShowLine=UiStub.Config.ShowMarker=UiStub.Config.ShowMaxCount=enabled;
+    for(int g=0;g<8;g++)
+    {
+     for(int f=0;f<2;f++)
+     {
+      ImGui.NewFrame();ImGui.SetNextWindowPos(new(30,30));ImGui.SetNextWindowSize(new(1100,840));ImGui.Begin("Audit category");
+      ImGui.PushFont(UiStub.Fonts[0]);Call("DrawFeatureGroup",g);ImGui.PopFont();ImGui.End();ImGui.Render();frames++;
+     }
+     Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,$"audit-{g}-{enabled}-{language}.bmp"));
+    }
+   }
+   foreach(var language in new[]{"ja","en"})
+   foreach(var feature in FeatureCatalog.All)
+   {
+    for(int f=0;f<2;f++)
+    {
+     io.AddMousePosEvent(400,200);ImGui.NewFrame();ImGui.PushFont(UiStub.Fonts[0]);
+     type.GetMethod("DrawHelpTooltip",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,new object[]{FeatureHelp.Get(feature.Id,language)});
+     ImGui.PopFont();ImGui.Render();frames++;
+    }
+    if(ImGui.GetDrawData().TotalVtxCount==0)throw new Exception("Empty tooltip: "+feature.Id);
+   }
+   // Exercise real ImGui checkbox input, not only configuration setters.
+   UiStub.Config.Support.Features=[77];UiStub.Config.Support.SmallFeatures=[];UiStub.Config.Support.CurrentLarge=false;
+   UiStub.Config.ShowLine=UiStub.Config.ShowMarker=UiStub.Config.ShowMaxCount=true;
+   System.Numerics.Vector2 toggle=default;float offHeight=0,onHeight=0;
+   for(int step=0;step<5;step++)
+   {
+    if(step>=2)io.AddMousePosEvent(toggle.X+5,toggle.Y+5);
+    if(step==2)io.AddMouseButtonEvent(0,true);
+    if(step==3)io.AddMouseButtonEvent(0,false);
+    ImGui.NewFrame();ImGui.SetNextWindowPos(new(40,40));ImGui.SetNextWindowSize(new(850,250));ImGui.Begin("Toggle audit");
+    toggle=ImGui.GetCursorScreenPos();var before=ImGui.GetCursorPosY();
+    Call("DrawFeatureToggle",FeatureCatalog.ById[43]);var height=ImGui.GetCursorPosY()-before;
+    if(step==1)offHeight=height;if(step==4)onHeight=height;
+    ImGui.End();ImGui.Render();frames++;
+   }
+   if(!UiStub.Config.Support.On(43)||UiStub.Config.Support.Features.Contains(43))throw new Exception("UI checkbox did not update active profile");
+   if(onHeight<=offHeight)throw new Exception("Enabled feature details did not become visible");
+   if(!UiStub.Config.ShowLine||!UiStub.Config.ShowMarker||!UiStub.Config.ShowMaxCount)throw new Exception("Unrelated legacy features changed");
+   UiStub.Config.Support.SmallFeatures=null;UiStub.Config.Support.Features=[];io.AddMousePosEvent(-100,-100);
    for(int i=0;i<10;i++){ImGui.NewFrame();Call("DrawSettingsWindow");ImGui.Render();}
    Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"settings-en.bmp"));
    foreach(var language in new[]{"ja","en"})
@@ -65,7 +110,7 @@ internal static unsafe class Program
    Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"support-hud-ja.bmp"));
    UiStub.Pvp=false;
    if(UiStub.Saves!=0)throw new Exception("Unchanged UI must not save");
-   Console.WriteLine($"PASS {frames+12} headless production UI frames; 8 categories and 10 sidebar pages in Japanese and English; zero unchanged config writes.");
+   Console.WriteLine($"PASS {frames+12} headless production UI frames; 8 categories on/off, all feature tooltips and 10 sidebar pages in Japanese and English; zero unchanged config writes.");
   }
   ImGui.DestroyContext();foreach(var pin in UiStub.Pins)pin.Free();
  }

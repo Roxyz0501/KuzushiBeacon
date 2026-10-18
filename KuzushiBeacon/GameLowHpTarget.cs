@@ -46,6 +46,6 @@ internal sealed class GameLowHpTarget(IClientState client, IObjectTable objects,
         return true;
     }
     private static bool Eligible(IPlayerCharacter p, SupportOptions? o, Func<Vector3,bool>? visible, bool ally)
-        => o == null || (!o.On(4) || visible?.Invoke(p.Position + Vector3.UnitY)==true)
+        => o == null || (ally || !o.On(4) || visible?.Invoke(p.Position + Vector3.UnitY)==true)
         && (ally || !StatusRules.Excluded(p,o.ExcludeGuard,o.ExcludeInvulnerable));
 }

@@ -204,7 +204,7 @@ internal sealed partial class LedgerModule : IDisposable
         if (victim is { IsPlayer: true } && IsLocal(killer)) current.Add(DateTimeOffset.UtcNow, EventKind.Kill, victim.Name.ExtractText());
         else if (IsLocal(victim)) current.Add(DateTimeOffset.UtcNow, EventKind.Death, killer?.Name.ExtractText() ?? "");
     }
-    private void ChangeConfig() { StartTicks(); saveConfigDue = DateTimeOffset.UtcNow.AddMilliseconds(500); }
+    private void ChangeConfig() { config.Sanitize(); StartTicks(); saveConfigDue = DateTimeOffset.UtcNow.AddMilliseconds(500); }
     private void SaveConfig()
     {
         try { save(); saveConfigDue = default; }

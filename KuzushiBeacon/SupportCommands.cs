@@ -23,6 +23,7 @@ public sealed partial class Plugin
     private void ReconcileLedger()
     {
         if(disposed)return;
+        config.Ledger.Language=config.Language;
         if(config.Enabled&&S.LedgerEnabled&&ledger==null)
             ledger=new Ledger.LedgerModule(pi,commands,client,playerState,duty,data,framework,chat,interop,log,config.Ledger,()=>{dirty=true;Save();});
         else if((!config.Enabled||!S.LedgerEnabled)&&ledger!=null){ledger.Dispose();ledger=null;}
@@ -38,8 +39,9 @@ public sealed partial class Plugin
             catch { /* Unknown mode uses the small/default profile. */ }
         }
         S.CurrentLarge=largeContent;
-        if(On(86)&&client.IsPvPExcludingDen&&duty.IsDutyStarted&&!reviewCompleted&&reviewStarted==null)reviewStarted=DateTimeOffset.UtcNow;
-        if(!reviewLoaded&&On(86))
+        if(reviewStarted!=null&&(!config.Enabled||!On(86)))FinishReview();
+        if(config.Enabled&&On(86)&&client.IsPvPExcludingDen&&duty.IsDutyStarted&&!reviewCompleted&&reviewStarted==null)reviewStarted=DateTimeOffset.UtcNow;
+        if(!reviewLoaded&&(On(86)||On(95)))
         {
             reviewLoaded=true;var path=Path.Combine(pi.GetPluginConfigDirectory(),"support-review","matches.json");
             // A capped local file is loaded only on first opt-in, never per-frame or per-tab.

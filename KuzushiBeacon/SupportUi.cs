@@ -99,103 +99,193 @@ public sealed partial class Plugin
             2=>L("自分が付けた崩しの表示、LBの通知、斬鉄剣の対象選択条件を調整します。","Configure your Kuzushi highlights, LB alerts and Zantetsuken target conditions."),
             _=>L("必要な表示・通知だけをオンにできます。詳しい動作や見た目は下の設定で調整します。","Enable the displays and alerts you need. Adjust their behavior and appearance below.")
         });
+        ImGui.TextWrapped(S.Features.Contains(77)&&!S.DisabledGroups.Contains(5)
+            ? L(S.CurrentLarge?"編集中：大人数戦の機能選択（未保存なら共通設定）":"編集中：少人数戦の機能選択（未保存なら共通設定）",S.CurrentLarge?"Editing large-match features (common fallback if unsaved)":"Editing small-match features (common fallback if unsaved)")
+            : L("編集中：共通の機能選択","Editing common features"));
         ImGui.Separator();
         var enabled=!S.DisabledGroups.Contains(group);
         if(ImGui.Checkbox(L("このカテゴリの補助機能を使う","Enable this category"),ref enabled))
         {if(enabled)S.DisabledGroups.Remove(group);else S.DisabledGroups.Add(group);changed=true;}
         if(ImGui.Button(L("表示・通知をまとめてオン","Enable category features")))
-        {foreach(var f in FeatureCatalog.All.Where(f=>f.Group==group&&f.Id!=99))S.Features.Add(f.Id);changed=true;}
+        {S.SetCategoryFeatures(group,true);if(group==2)config.ShowLine=config.ShowMarker=config.ShowMaxCount=true;changed=true;}
         ImGui.SameLine();
         if(ImGui.Button(L("表示・通知をまとめてオフ","Disable category features")))
-        {foreach(var f in FeatureCatalog.All.Where(f=>f.Group==group))S.Features.Remove(f.Id);changed=true;}
-        foreach(var f in FeatureCatalog.All.Where(f=>f.Group==group))
-        {
-            var value=S.Features.Contains(f.Id);
-            if(ImGui.Checkbox($"{FeatureCatalog.Name(f.Id,config.Language)}###feature{f.Id}",ref value))
-            {if(value)S.Features.Add(f.Id);else S.Features.Remove(f.Id);changed=true;}
-        }
+        {S.SetCategoryFeatures(group,false);if(group==2)config.ShowLine=config.ShowMarker=config.ShowMaxCount=false;changed=true;}
+        foreach(var f in FeatureCatalog.All.Where(f=>f.Group==group))changed|=DrawFeatureToggle(f);
         ImGui.Separator();
-        ImGui.TextUnformatted(L("動作・表示の調整","Behavior and appearance"));
+        bool Any(params int[] ids)=>ids.Any(On);
         switch(group)
         {
             case 0:
-                ImGui.TextWrapped("/pvplowhp [auto|3|5|20]  /pvplowhp3  /pvplowhp5  /pvplowhp20\n/pvpnearest [auto|3|5|20]\n/pvpally [20]  /pvptrack  /pvpassist  /pvpztarget");
+                ImGui.TextUnformatted(L("コマンドの共通設定","Shared command settings"));
                 changed|=ImGui.SliderFloat(L("近接・タンクの射程","Melee / tank range"),ref S.MeleeRange,1,3,"%.1f m");
                 changed|=ImGui.SliderFloat(L("遠隔・ヒーラーの射程","Ranged / healer range"),ref S.RangedRange,1,20,"%.1f m");
                 changed|=ImGui.SliderFloat(L("味方選択の射程","Ally selection range"),ref S.AllyRange,1,20,"%.1f m");
-                changed|=ImGui.Checkbox(L("通常選択：防御を除外","Targeting: exclude Guard"),ref S.ExcludeGuard);
-                changed|=ImGui.Checkbox(L("通常選択：既知の無敵を除外","Targeting: exclude known invulnerability"),ref S.ExcludeInvulnerable);
-                ImGui.TextWrapped(L("最低HPは残りHP実数で比較。autoまたは引数なしでジョブに合わせます。画面内限定は投影位置で判定し、壁の遮蔽判定とは異なります。","Lowest HP compares absolute HP. No argument or auto uses your job range. On-screen checks projection, not wall occlusion."));break;
+                changed|=ImGui.Checkbox(L("敵の選択：防御を除外","Enemy targeting: exclude Guard"),ref S.ExcludeGuard);
+                changed|=ImGui.Checkbox(L("敵の選択：既知の無敵を除外","Enemy targeting: exclude known invulnerability"),ref S.ExcludeInvulnerable);
+                ImGui.TextWrapped(L("コマンドは常に登録されます。射程は引数なし・autoで使用し、固定距離・数値引数を指定した場合はジョブ上限内でその値を使用します。最低HPは残りHP実数で比較します。","Commands are always registered. No argument or auto uses these ranges; fixed/numeric ranges override them within the job cap. Lowest HP compares absolute HP."));
+                break;
             case 1:
-                changed|=ImGui.SliderFloat(L("範囲の半径","Area radius"),ref S.AreaRadius,1,30,"%.1f m");
-                changed|=ImGui.SliderFloat(L("低HPの判定（%）","Low HP threshold (%)"),ref S.LowHpPercent,1,99);
-                changed|=ImGui.SliderInt(L("通知する巻き込み人数","Coverage alert count"),ref S.AlertCount,1,20);
-                ImGui.TextWrapped(L("一般範囲の計算はこのジャンルの人数機能を有効にした場合だけ。斬鉄剣の計算はLB満タン時のみです。","General area analysis runs only for enabled count features. Zantetsuken geometry runs only with full LB."));break;
+                if(Any(19,20,21,22,23,24))
+                {
+                    ImGui.TextUnformatted(L("範囲表示・人数計算の共通設定","Shared area display / count settings"));
+                    changed|=ImGui.SliderFloat(L("範囲の半径","Area radius"),ref S.AreaRadius,1,30,"%.1f m");
+                }
+                break;
             case 2:
+                ImGui.TextUnformatted(L("斬鉄剣コマンドの共通設定","Shared Zantetsuken command settings"));
                 changed|=ImGui.Checkbox(L("斬鉄剣：防御を除外（通常はオフ）","Zantetsuken: exclude Guard (normally off)"),ref S.ZantetsukenExcludeGuard);
                 changed|=ImGui.Checkbox(L("斬鉄剣：既知の無敵を除外","Zantetsuken: exclude known invulnerability"),ref S.ZantetsukenExcludeInvulnerable);
-                changed|=ImGui.SliderInt(L("斬鉄剣の最低人数","Minimum Zantetsuken targets"),ref S.MinimumZantetsuken,1,20);
-                changed|=ImGui.SliderFloat(L("崩し期限の警告秒数","Expiring Kuzushi seconds"),ref S.ExpiringSeconds,.1f,5);
                 DrawLegacy(2);break;
-            case 3:
-                changed|=ImGui.SliderFloat(L("低HPの判定（%）","Low HP threshold (%)"),ref S.LowHpPercent,1,99);
-                changed|=ImGui.SliderFloat(L("急減の判定（%/秒）","Rapid loss (%/s)"),ref S.RapidLossPercent,1,100);
-                changed|=ImGui.SliderFloat(L("低MPの判定","Low MP threshold"),ref S.LowMp,0,10000,"%.0f");
-                changed|=ImGui.SliderInt(L("集中攻撃の人数","Focus fire threshold"),ref S.FocusCount,1,20);
-                changed|=ImGui.SliderInt(L("敵の増加人数","Enemy increase threshold"),ref S.NearbyIncrease,1,20);break;
-            case 4:
-                changed|=ImGui.SliderFloat(L("周囲の集計距離","Nearby count range"),ref S.NearbyRange,3,100,"%.1f m");
-                changed|=ImGui.SliderFloat(L("味方から離れた距離","Ally separation distance"),ref S.Separation,3,100,"%.1f m");
-                changed|=ImGui.SliderInt(L("人数不利の差","Disadvantage threshold"),ref S.Disadvantage,1,20);
-                ImGui.TextWrapped(L("味方を選択して /pvptrack、解除は /pvptrack clear。方向表示は地形・通行可否を保証しません。","Select an ally and run /pvptrack; /pvptrack clear removes tracking. Direction estimates do not verify terrain or a safe route."));break;
+            case 3: case 4:
+                if(Any(58,61,62,63,65,66,75))
+                {
+                    ImGui.TextUnformatted(L("周囲の人数・位置取りの共通設定","Shared nearby counts / positioning settings"));
+                    changed|=ImGui.SliderFloat(L("周囲の集計距離","Nearby count range"),ref S.NearbyRange,3,100,"%.1f m");
+                }
+                break;
             case 5:
-                changed|=ImGui.SliderInt(L("ミュートの既定秒数","Default mute seconds"),ref S.MuteSeconds,1,3600);
                 changed|=ImGui.Checkbox(L("通知をまとめてオン","Enable all notifications"),ref S.Notifications);
-                changed|=ImGui.Checkbox(L("通知SEをまとめてオン","Enable notification audio"),ref S.Sound);
-                changed|=ImGui.SliderFloat(L("SE音量","Sound volume"),ref S.Volume,0,1,"%.2f");
-                changed|=ImGui.SliderInt(L("崩しの音色","Kuzushi tone"),ref S.KuzushiTone,0,2);
-                changed|=ImGui.SliderInt(L("LBの音色","LB tone"),ref S.LbTone,0,2);
-                changed|=ImGui.SliderInt(L("危険の音色","Danger tone"),ref S.DangerTone,0,2);
-                changed|=ImGui.SliderFloat(L("通知条件の安定時間","Stable condition duration"),ref S.StableSeconds,0,5,"%.1f s");
-                changed|=ImGui.SliderFloat(L("文字サイズ","Text size"),ref S.TextSize,12,40,"%.0f px");
-                changed|=ImGui.ColorEdit4(L("射程内・味方の色","In-range / ally color"),ref S.GoodColor);
-                changed|=ImGui.ColorEdit4(L("射程外・危険の色","Out-of-range / danger color"),ref S.BadColor);
-                changed|=ImGui.ColorEdit4(L("他者の崩し・追跡色","Other Kuzushi / tracking color"),ref S.OtherColor);
-                if(ImGui.Button(L("青・黄の配色セット","Blue / yellow palette")))
-                {S.GoodColor=new(.2f,.7f,1,1);S.BadColor=new(1,.8f,.15f,1);S.Features.Add(82);changed=true;}
-                ImGui.TextUnformatted("/pvpmute [seconds]    /pvpmute 0");
-                if(ImGui.Button(L("現在の機能選択を少人数戦に保存","Save current features for small matches"))) {S.SmallFeatures=new(S.Features);changed=true;}
-                if(ImGui.Button(L("現在の機能選択を大人数戦に保存","Save current features for large matches"))) {S.LargeFeatures=new(S.Features);changed=true;}
-                if(ImGui.Button(L("コンテンツ別の上書きを解除","Clear content overrides"))) {S.SmallFeatures=S.LargeFeatures=null;changed=true;}
+                if(S.Notifications)
+                {
+                    ImGui.Indent();
+                    changed|=ImGui.Checkbox(L("通知SEをまとめてオン","Enable notification audio"),ref S.Sound);
+                    if(S.Sound)
+                    {
+                        changed|=ImGui.SliderFloat(L("SE音量","Sound volume"),ref S.Volume,0,1,"%.2f");
+                        changed|=ImGui.SliderInt(L("ミュートの既定秒数","Default mute seconds"),ref S.MuteSeconds,1,3600);
+                    }
+                    ImGui.Unindent();
+                }
+                if(S.NeedsMonitor)
+                {
+                    ImGui.TextUnformatted(L("支援表示の共通設定","Shared support display settings"));
+                    changed|=ImGui.SliderFloat(L("文字サイズ","Text size"),ref S.TextSize,12,40,"%.0f px");
+                    changed|=ImGui.ColorEdit4(L("射程内・味方の色","In-range / ally color"),ref S.GoodColor);
+                    changed|=ImGui.ColorEdit4(L("射程外・危険の色","Out-of-range / danger color"),ref S.BadColor);
+                    if(Any(19,36,67,74,83))changed|=ImGui.ColorEdit4(L("他者の崩し・追跡色","Other Kuzushi / tracking color"),ref S.OtherColor);
+                }
                 break;
             case 6:
-                changed|=ImGui.InputText(L("試合メモ","Match note"),ref S.MatchNote,200);
-                ImGui.TextWrapped(L("支援集計は最大100試合、匿名出力は最新20件。プレイヤー名・IDは保存しません。戦績履歴は別タブで管理します。","Support summaries retain 100 matches and 20 anonymous exports without player names or IDs. KDA history is managed in the ledger tab."));
+                ImGui.TextWrapped(L("試合の保存には「試合ごとのローカル記録」が必要です。現在の集計は保存しなくても確認できます。","Local match summaries is required to save matches. Current counters can be inspected without saving."));
+                DrawReviewDetails();break;
+            case 7:
+                if(S.NeedsMonitor)
+                {
+                    ImGui.TextUnformatted(L("支援機能の共通更新間隔","Shared support refresh interval"));
+                    changed|=ImGui.SliderInt(L("更新間隔","Update interval"),ref S.UpdateMs,50,1000,"%d ms");
+                }
+                DrawLegacy(7);break;
+        }
+        if(changed){config.Sanitize();MarkDirty();}
+    }
+    private bool DrawFeatureToggle(Feature feature)
+    {
+        var value=S.Selected(feature.Id);
+        var changed=ImGui.Checkbox($"{FeatureCatalog.Name(feature.Id,config.Language)}###feature{feature.Id}",ref value);
+        if(changed)S.SetFeature(feature.Id,value);
+        HoverHelp(FeatureHelp.Get(feature.Id,config.Language));
+        if(On(feature.Id)){ImGui.Indent();changed|=DrawFeatureParameters(feature.Id);ImGui.Unindent();}
+        return changed;
+    }
+    private static void HoverHelp(string help)
+    {
+        if(!ImGui.IsItemHovered())return;
+        DrawHelpTooltip(help);
+    }
+    private static void DrawHelpTooltip(string help)
+    {ImGui.BeginTooltip();ImGui.PushTextWrapPos(ImGui.GetFontSize()*28);ImGui.TextUnformatted(help);ImGui.PopTextWrapPos();ImGui.EndTooltip();}
+    private bool DrawFeatureParameters(int id)
+    {
+        bool changed=false;
+        switch(id)
+        {
+            case 21: case 46: case 69:
+                ImGui.PushID(id);
+                changed|=ImGui.SliderFloat(L("低HPの判定（%・共通）","Low HP threshold (%, shared)"),ref S.LowHpPercent,1,99);
+                ImGui.PopID();break;
+            case 24: changed|=ImGui.SliderInt(L("通知する巻き込み人数","Coverage alert count"),ref S.AlertCount,1,20);break;
+            case 25: changed|=ImGui.SliderFloat(L("通知条件の安定時間","Stable condition duration"),ref S.StableSeconds,0,5,"%.1f s");break;
+            case 32: changed|=ImGui.SliderFloat(L("崩し期限の警告秒数","Expiring Kuzushi seconds"),ref S.ExpiringSeconds,.1f,5);break;
+            case 43: changed|=ImGui.SliderInt(L("斬鉄剣の最低人数","Minimum Zantetsuken targets"),ref S.MinimumZantetsuken,1,20);break;
+            case 47: changed|=ImGui.SliderFloat(L("急減の判定（%/秒）","Rapid loss (%/s)"),ref S.RapidLossPercent,1,100);break;
+            case 48: changed|=ImGui.SliderFloat(L("低MPの判定","Low MP threshold"),ref S.LowMp,0,10000,"%.0f");break;
+            case 57: changed|=ImGui.SliderInt(L("集中攻撃の人数","Focus fire threshold"),ref S.FocusCount,1,20);break;
+            case 58: changed|=ImGui.SliderInt(L("敵の増加人数","Enemy increase threshold"),ref S.NearbyIncrease,1,20);break;
+            case 63: changed|=ImGui.SliderInt(L("人数不利の差","Disadvantage threshold"),ref S.Disadvantage,1,20);break;
+            case 68: changed|=ImGui.SliderFloat(L("味方から離れた距離","Ally separation distance"),ref S.Separation,3,100,"%.1f m");break;
+            case 77:
+                if(ImGui.Button(L("現在の機能選択を少人数戦に保存","Save current features for small matches"))) {S.SmallFeatures=new(S.ActiveFeatures());changed=true;}
+                if(ImGui.Button(L("現在の機能選択を大人数戦に保存","Save current features for large matches"))) {S.LargeFeatures=new(S.ActiveFeatures());changed=true;}
+                if(ImGui.Button(L("コンテンツ別の上書きを解除","Clear content overrides"))) {S.SmallFeatures=S.LargeFeatures=null;changed=true;}
+                break;
+            case 80:
+                if(S.Sound&&S.Notifications)
+                {
+                    changed|=ImGui.SliderInt(L("崩しの音色","Kuzushi tone"),ref S.KuzushiTone,0,2);
+                    changed|=ImGui.SliderInt(L("LBの音色","LB tone"),ref S.LbTone,0,2);
+                    changed|=ImGui.SliderInt(L("危険の音色","Danger tone"),ref S.DangerTone,0,2);
+                }
+                break;
+            case 82:
+                if(ImGui.Button(L("青・黄の配色セット","Blue / yellow palette")))
+                {S.GoodColor=new(.2f,.7f,1,1);S.BadColor=new(1,.8f,.15f,1);changed=true;}
+                break;
+            case 94: changed|=ImGui.InputText(L("試合メモ","Match note"),ref S.MatchNote,200);break;
+            case 97:
+                changed|=ImGui.SliderInt(L("最大走査対象数","Maximum actors"),ref S.MaxActors,10,200);
+                changed|=ImGui.SliderInt(L("頭上表示の最大件数","Maximum overhead labels"),ref S.MaxDraw,1,100);
+                changed|=ImGui.SliderFloat(L("範囲計算の処理予算","Area calculation budget"),ref S.BudgetMs,.25f,10,"%.2f ms");break;
+            case 98: changed|=ImGui.SliderFloat(L("表示情報の有効期間","Display expiry"),ref S.StaleSeconds,.1f,2,"%.1f s");break;
+            case 100:
+                ImGui.TextUnformatted($"Scans {supportScans} · actors {supportReads} · labels {supportDraws}");
+                foreach(var cost in costs)ImGui.TextUnformatted($"{cost.Key}: {cost.Value.Ms:F3} ms / {cost.Value.Calls}");break;
+        }
+        return changed;
+    }
+    private void DrawReviewDetails()
+    {
                 if(On(87))ImGui.TextUnformatted($"LB: {fullSeconds:F1}s");
                 if(On(88))ImGui.TextUnformatted(L("機会: ","Opportunities: ")+opportunities);
                 if(On(89))ImGui.TextUnformatted(L("最大人数: ","Peak coverage: ")+peakCoverage);
-                if(On(60)||On(92))ImGui.TextUnformatted(L("死亡メモ: ","Death notes: ")+deathRecords.Count);
+                if(On(90))DrawCountDictionary(L("コマンド利用回数","Command counts"),commandCounts);
+                if(On(91))DrawCountDictionary(L("対象が見つからなかった理由","Failure reasons"),failureCounts);
+                if(On(60)||On(92)||On(93))DrawDeathRecords(deathRecords);
                 if(On(95)&&ImGui.Button(L("匿名集計をJSON出力","Export anonymous JSON")))QueueReviewWrite(true);
                 if(reviewStatus.Length>0)ImGui.TextWrapped(reviewStatus);
                 foreach(var row in reviewHistory.AsEnumerable().Reverse().Take(20))
-                    ImGui.TextWrapped($"{row.Started.ToLocalTime():MM/dd HH:mm} · LB {row.FullSeconds:F1}s · {row.Opportunities} / {row.Peak} · {row.Note}");
-                break;
-            case 7:
-                changed|=ImGui.SliderInt(L("新機能の更新間隔","Support update interval"),ref S.UpdateMs,50,1000,"%d ms");
-                changed|=ImGui.SliderInt(L("最大走査対象数","Maximum actors"),ref S.MaxActors,10,200);
-                changed|=ImGui.SliderInt(L("最大描画件数","Maximum labels"),ref S.MaxDraw,1,100);
-                changed|=ImGui.SliderFloat(L("範囲計算の処理予算","Area calculation budget"),ref S.BudgetMs,.25f,10,"%.2f ms");
-                changed|=ImGui.SliderFloat(L("表示情報の有効期間","Display expiry"),ref S.StaleSeconds,.1f,2,"%.1f s");
-                DrawLegacy(7);
-                ImGui.TextWrapped(L("検証モードでも選択計算は行いますが、ターゲット変更・アクション要求は行いません。操作直前の再検証は常に有効です。","Dry run evaluates choices without changing targets or requesting actions. Final action revalidation is always enabled."));
-                if(On(100))
                 {
-                    ImGui.TextUnformatted($"Scans {supportScans} · actors {supportReads} · labels {supportDraws}");
-                    foreach(var cost in costs)ImGui.TextUnformatted($"{cost.Key}: {cost.Value.Ms:F3} ms / {cost.Value.Calls}");
+                    ImGui.PushID(row.Started.ToString("O"));
+                    if(ImGui.TreeNode($"{row.Started.ToLocalTime():MM/dd HH:mm} · {row.Note}###review"))
+                    {
+                        if(row.FullSeconds is {} held)ImGui.TextUnformatted($"LB: {held:F1}s");
+                        if(row.Opportunities is {} opportunityCount)ImGui.TextUnformatted(L("機会: ","Opportunities: ")+opportunityCount);
+                        if(row.Peak is {} peak)ImGui.TextUnformatted(L("最大人数: ","Peak coverage: ")+peak);
+                        if(row.Settings!=null)foreach(var setting in row.Settings)ImGui.TextUnformatted($"{setting.Key}: {setting.Value}");
+                        if(row.Commands!=null)DrawCountDictionary(L("コマンド利用回数","Command counts"),row.Commands);
+                        if(row.Failures!=null)DrawCountDictionary(L("対象が見つからなかった理由","Failure reasons"),row.Failures);
+                        DrawDeathRecords(row.Deaths);
+                        ImGui.TreePop();
+                    }
+                    ImGui.PopID();
                 }
-                break;
+    }
+    private void DrawCountDictionary(string title,IReadOnlyDictionary<string,long> values)
+    {
+        ImGui.TextUnformatted(title);
+        if(values.Count==0)ImGui.TextUnformatted(L("記録なし","No entries"));
+        foreach(var value in values)ImGui.TextUnformatted($"{value.Key}: {value.Value}");
+    }
+    private void DrawDeathRecords(IEnumerable<DeathRecord> records)
+    {
+        foreach(var death in records.Reverse().Take(10))
+        {
+            ImGui.TextWrapped($"{death.At.ToLocalTime():HH:mm:ss} · "+L("死亡","Death")+
+                (death.Enemies is {} enemies?L($" · 敵{enemies} / 味方{death.Allies}",$" · Enemies {enemies} / allies {death.Allies}"):"")+
+                (death.Survival is {} survival?L($" · 警告後 {survival:F1}秒",$" · {survival:F1}s after warning"):""));
+            foreach(var state in death.States??[])
+                ImGui.TextWrapped($"HP {state.Hp} / MP {state.Mp} · "+string.Join(", ",state.Controls.Select(id=>StatusRules.Label(id,config.Language=="ja"))));
         }
-        if(changed){config.Sanitize();MarkDirty();}
     }
     private void DrawSupportOverlay()
     {
@@ -271,13 +361,17 @@ public sealed partial class Plugin
             if(On(75)&&retreatDirection!=Vector3.Zero)DrawDirection(draw,player.Position,player.Position+retreatDirection*10,other,"~");
         }
         if(NotificationsAllowed)
-            rows.InsertRange(0,(On(79)?alerts.OrderByDescending(a=>a.Value.Priority):alerts.OrderBy(a=>a.Key)).Where(a=>a.Value.Until>now).Take(3).Select(a=>"! "+a.Value.Text));
+            rows.InsertRange(0,(On(79)?alerts.OrderByDescending(a=>a.Value.Priority):alerts.OrderBy(a=>a.Key)).Where(a=>On(a.Key)&&a.Value.Until>now).Take(3).Select(a=>"! "+a.Value.Text));
         if(rows.Count>0)
         {
             ImGui.SetNextWindowBgAlpha(.65f);
             ImGui.SetNextWindowPos(new Vector2(30,350),ImGuiCond.FirstUseEver);
             if(ImGui.Begin("PvP Supporter HUD###SupportHud",ImGuiWindowFlags.AlwaysAutoResize|ImGuiWindowFlags.NoTitleBar|ImGuiWindowFlags.NoFocusOnAppearing|ImGuiWindowFlags.NoNav))
+            {
+                ImGui.SetWindowFontScale(S.TextSize/ImGui.GetFontSize());
                 foreach(var row in rows.Take(30))ImGui.TextUnformatted(row);
+                ImGui.SetWindowFontScale(1);
+            }
             ImGui.End();
         }
         supportDraws+=drawn;
@@ -294,10 +388,10 @@ public sealed partial class Plugin
     }
     private void DrawDirection(ImDrawListPtr draw,Vector3 from,Vector3 to,uint color,string label)
     {
-        if(Project(from+Vector3.UnitY,out var origin)&&Project(to+Vector3.UnitY,out var target))
+        if(OnScreen(to+Vector3.UnitY)&&Project(from+Vector3.UnitY,out var origin)&&Project(to+Vector3.UnitY,out var target))
         {draw.AddLine(origin,target,color,1);draw.AddText(target,color,label);return;}
         // Projection can return valid coordinates outside the viewport. Never invent a bearing behind the camera.
-        gui.WorldToScreen(to+Vector3.UnitY,out var projected,out _);
+        if(!gui.WorldToScreen(to+Vector3.UnitY,out var projected,out _))return;
         var viewport=ImGui.GetMainViewport();var center=viewport.Pos+viewport.Size/2;
         if(!float.IsFinite(projected.X)||!float.IsFinite(projected.Y))return;
         var delta=projected-center;if(delta.LengthSquared()<1)return;

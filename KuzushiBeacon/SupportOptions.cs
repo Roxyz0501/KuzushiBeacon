@@ -50,7 +50,7 @@ public static class FeatureCatalog
         new(94,6,"設定比較用の試合メモ","Match settings note"),new(95,6,"匿名集計の書き出し","Anonymous summary export"),
         new(96,7,"使っていない機能の計算を省く","Scan only required features"),new(97,7,"混雑時の処理予算","Processing budgets"),
         new(98,7,"更新が止まった古い情報を表示から消す","Expire stale display data"),new(99,7,"検証モード：候補を調べるだけで操作しない","Dry run without targeting or actions"),
-        new(100,7,"機能別の負荷表示","Per-feature performance metrics")
+        new(100,7,"処理別の負荷表示","Processing-stage performance metrics")
     ];
     public static readonly IReadOnlyDictionary<int,Feature> ById=All.ToDictionary(f=>f.Id);
     public static string Name(int id, string? language) => All.FirstOrDefault(f => f.Id == id) is { } f ? language == "ja" ? f.Japanese : f.English : id.ToString();
@@ -81,15 +81,47 @@ public sealed class SupportOptions
     public HashSet<int>? SmallFeatures, LargeFeatures;
     [Newtonsoft.Json.JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
     public bool CurrentLarge;
+    public HashSet<int> ActiveFeatures(bool? large = null) => Features.Contains(77) && !DisabledGroups.Contains(5)
+        ? ((large ?? CurrentLarge) ? LargeFeatures : SmallFeatures) ?? Features : Features;
+    public bool Selected(int id) => (id == 77 ? Features : ActiveFeatures()).Contains(id);
+    public void SetFeature(int id,bool enabled)
+    {
+        var set=id==77?Features:ActiveFeatures();
+        if(enabled)set.Add(id);else set.Remove(id);
+    }
+    public void SetCategoryFeatures(int group,bool enabled)
+    {
+        // Capture before toggling profile selection (77), which changes ActiveFeatures.
+        var active=ActiveFeatures();
+        foreach(var feature in FeatureCatalog.All.Where(f=>f.Group==group&&(!enabled||f.Id!=99)))
+        {
+            var set=feature.Id==77?Features:active;
+            if(enabled)set.Add(feature.Id);else set.Remove(feature.Id);
+        }
+    }
+    public void SetAllFeatures(bool enabled)
+    {
+        foreach(var set in new[]{Features,SmallFeatures,LargeFeatures}.Where(s=>s!=null))
+        {set!.Clear();if(enabled)set.UnionWith(FeatureCatalog.All.Where(f=>f.Id!=99).Select(f=>f.Id));}
+        if(enabled)DisabledGroups.Clear();
+    }
+    public bool NeedsSelfStatuses => !On(96) || new[]{37,38,51,53,54,55,60}.Any(id=>On(id));
+    public bool NeedsEnemyStatuses(bool legacy) => legacy || !On(96) || Enumerable.Range(31,6).Any(id=>On(id))
+        || new[]{38,40,41,45,88,89}.Any(id=>On(id))
+        || (ExcludeGuard||ExcludeInvulnerable)&&(Enumerable.Range(20,5).Any(id=>On(id))||On(29));
+    public bool NeedsOtherActors(bool legacy) => legacy || !On(96)
+        || Enumerable.Range(16,30).Any(id=>id is not (25 or 26 or 30 or 37 or 39 or 42 or 43 or 44)&&On(id))
+        || Enumerable.Range(56,20).Any(id=>On(id)) || On(83) || On(88) || On(89) || On(92);
+    public int SnapshotInterval(bool legacy,int legacyInterval) => legacy?Math.Min(UpdateMs,legacyInterval):UpdateMs;
     public bool On(int id, bool? large = null)
     {
         var feature = FeatureCatalog.ById.GetValueOrDefault(id);
         if (feature is null || DisabledGroups.Contains(feature.Group)) return false;
-        var set = id != 77 && Features.Contains(77) && !DisabledGroups.Contains(5) ? ((large ?? CurrentLarge) ? LargeFeatures : SmallFeatures) ?? Features : Features;
+        var set = id == 77 ? Features : ActiveFeatures(large);
         return set.Contains(id);
     }
     public bool NeedsMonitor => FeatureCatalog.All.Any(f => f.Id is >=16 and <=75 && f.Id is not (25 or 26 or 30 or 42 or 43 or 70 or 72) && On(f.Id))
-        || On(87)||On(88)||On(89)||On(92)||On(93)||On(100);
+        || On(83)||On(87)||On(88)||On(89)||On(92)||On(93)||On(100);
     public static float JobRange(uint job, float melee, float ranged)
         => job is 1 or 2 or 3 or 4 or 19 or 20 or 21 or 22 or 29 or 30 or 32 or 34 or 37 or 39 or 41 ? melee : ranged;
     public static float CommandRange(uint job,float requested,bool ally=false) => Math.Min(requested,ally?20:JobRange(job,3,20));

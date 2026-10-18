@@ -1,3 +1,13 @@
+# 1.1.0.2 settings audit — 2026-10-19
+
+Full inventory and concrete consumers: SETTING_AUDIT.md. No claim of live-game validation.
+
+- 300 managed checks pass, including active-profile editing, independent tracking/death dependency gates and shared scan intervals; bilingual help for every feature.
+- 56 real-host checks pass. Standalone offscreen tracking subscribes/scans, turning it off stops callbacks, configured mute duration is consumed. Export-only mode loads old typed-compatible death summaries; recording-off cannot append pending summaries.
+- 2,781 integrated Ledger checks pass. Fake HTTP only; no Discord delivery. Cached reads remain zero additional I/O, first page 25 reads, concurrent page +25, detail +1, 8,700 summary bytes.
+- 477 production UI frames pass: all categories on/off, 81 tooltips in both Japanese/English, navigation pages, actual ImGui checkbox input updates active profile and reveals detail without changing legacy switches. Zero unchanged config writes. Glyph coverage checked against four font faces.
+- Common tab source unchanged. Native game availability/projection/clipboard/audio behavior remains untested in a live match; no installed plugin overwrite.
+
 # 1.1.0.1 validation — 2026-10-19
 
 - 205 managed checks pass, including job/fixed command caps, oversized saved-range correction, and existing targeting/request gates.

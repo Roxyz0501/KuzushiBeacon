@@ -229,6 +229,28 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     Check(!Zantetsuken.Execute(true,1,Vector3.Zero,0,w,a,2,x=>x.EntityId!=3)&&a.Attempts==0,"excluded victim is not counted");
     Check(Zantetsuken.Execute(true,1,Vector3.Zero,0,w,a,1,x=>x.EntityId!=3)&&a.Last?.EntityId!=3,"excluded center is not selected");
 }
+// Settings-to-runtime audit regressions.
+{
+    foreach(var feature in FeatureCatalog.All)
+        Check(FeatureHelp.All.TryGetValue(feature.Id,out var help)&&help.Japanese.Length>10&&help.English.Length>10,"detailed bilingual help: "+feature.Id);
+    var p=new SupportOptions {Features=[77,96],SmallFeatures=[96],LargeFeatures=[96],CurrentLarge=true};
+    p.SetFeature(83,true);
+    Check(p.On(83)&&p.Selected(83)&&p.NeedsMonitor&&p.NeedsOtherActors(false),"active profile edit starts standalone offscreen tracking");
+    Check(!p.NeedsSelfStatuses&&!p.NeedsEnemyStatuses(false),"tracking does not require status scans");
+    Check(!p.Features.Contains(83)&&!p.SmallFeatures.Contains(83),"editing active large profile preserves other profiles");
+    p.SetFeature(83,false);Check(!p.NeedsMonitor,"turning tracking off stops its standalone monitor");
+    p.SetFeature(60,true);Check(p.On(60)&&p.NeedsSelfStatuses,"death snapshots collect self statuses independently");
+    Check(!p.NeedsEnemyStatuses(false),"death snapshots do not scan enemy statuses");
+    p.SetFeature(77,false);Check(!p.On(60)&&!p.NeedsMonitor,"profile switch is global even with saved profiles");
+    p.SetAllFeatures(true);Check(p.On(83)&&p.SmallFeatures.Contains(83)&&!p.LargeFeatures.Contains(99),"enable all updates every profile, excluding dry run");
+    p.SetAllFeatures(false);Check(!p.NeedsMonitor&&p.Features.Count==0&&p.SmallFeatures.Count==0&&p.LargeFeatures.Count==0,"disable all clears every profile");
+    p.Features=[96,31];Check(p.NeedsEnemyStatuses(false)&&!p.NeedsSelfStatuses,"Kuzushi labels read enemy statuses only");
+    p.Features=[96,37];Check(p.NeedsSelfStatuses&&!p.NeedsOtherActors(false),"Chiten alone does not scan other actors");
+    p.Features=[77];p.CurrentLarge=true;p.LargeFeatures=[79,80,83];p.SmallFeatures=[79];p.SetCategoryFeatures(5,false);
+    Check(!p.Features.Contains(77)&&p.LargeFeatures.Count==0&&p.SmallFeatures.Contains(79),"category disable keeps edits on original profile when profile switch is turned off");
+    p.UpdateMs=500;Check(p.SnapshotInterval(true,100)==100&&p.SnapshotInterval(false,100)==500,"legacy interval affects shared sampling");
+    p.UpdateMs=50;Check(p.SnapshotInterval(true,100)==50,"shared snapshot respects faster support interval");
+}
 Console.WriteLine($"PASS {checks} checks; localization complete for {Loc.Languages.Length} languages.");
 
 sealed class FakeWorld : IHighlightWorld

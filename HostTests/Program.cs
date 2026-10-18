@@ -125,6 +125,48 @@ foreach (var pvp in new[] { false, true })
     for(int i=0;i<600;i++)host.Raise("framework:Update",host.Framework);
     Check(host.ObjectReads==0&&host.PlayerEnumerations==0&&host.Errors==0,"all features and commands outside PvP perform zero object reads without hidden initialization errors");
 }
+{
+    var host=new Host {Pvp=true};
+    host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
+    host.Config.Support.Features=[83,96];
+    using var plugin=host.Load();
+    Check(host.Count("framework:Update")==1,"offscreen tracking alone subscribes to framework");
+    host.Raise("framework:Update",host.Framework);
+    Check(host.PlayerEnumerations==1&&host.Errors==0,"standalone tracking performs a real snapshot without native status/gauge calls");
+    host.Config.Support.Features.Remove(83);
+    typeof(Plugin).GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    Check(host.Count("framework:Update")==0,"disabling last tracking feature unsubscribes");
+}
+{
+    var host=new Host {Pvp=false};
+    using var plugin=host.Load();
+    host.Config.Support.MuteSeconds=123;
+    var before=System.Diagnostics.Stopwatch.GetTimestamp()/(double)System.Diagnostics.Stopwatch.Frequency;
+    host.Commands["/pvpmute"].Handler("/pvpmute","");
+    var until=(double)typeof(Plugin).GetField("muteUntil",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
+    Check(until-before>=123&&until-before<124,"mute command consumes configured duration");
+}
+{
+    var host=new Host {Pvp=false,ConfigDirectory=Path.GetFullPath("artifacts/review-audit-"+Guid.NewGuid().ToString("N"))};
+    var dir=Path.Combine(host.ConfigDirectory,"support-review");Directory.CreateDirectory(dir);
+    File.WriteAllText(Path.Combine(dir,"matches.json"),"""
+    [{"Started":"2026-10-19T00:00:00Z","Ended":"2026-10-19T00:05:00Z","Note":"old-format","Settings":null,"FullSeconds":5,"Opportunities":2,"Peak":3,"Commands":{"/pvplowhp":2},"Failures":{"out of range":1},"Deaths":[{"At":"2026-10-19T00:01:00Z","Enemies":3,"Allies":1,"Survival":4.5,"States":[{"Hp":2000,"Mp":1000,"Controls":[1343]}]}]}]
+    """);
+    host.Config.Support.Features=[95];
+    using var plugin=host.Load();
+    var type=typeof(Plugin);
+    var history=(System.Collections.IList)type.GetField("reviewHistory",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
+    Check(history.Count==1,"export-only mode loads existing summaries without recording enabled");
+    var json=System.Text.Json.JsonSerializer.Serialize(history[0]);
+    Check(json.Contains("1343")&&json.Contains("4.5")&&json.Contains("out of range"),"old anonymous death objects deserialize into typed review details");
+    type.GetField("reviewStarted",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,(DateTimeOffset?)DateTimeOffset.UtcNow);
+    type.GetMethod("FinishReview",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    Check(history.Count==1,"recording disabled never appends a pending summary");
+    var counters=(Dictionary<string,long>)type.GetField("commandCounts",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
+    counters["/pvplowhp"]=3;
+    type.GetMethod("ReconcileLedger",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    Check(counters["/pvplowhp"]==3,"unrelated configuration changes do not erase live counters when recording is off");
+}
 Console.WriteLine($"PASS {checks} host lifecycle checks (real Plugin + thread-enforcing service doubles).");
 
 sealed class Host
@@ -136,6 +178,7 @@ sealed class Host
     public Queue<(Action Action, TaskCompletionSource Completion)> Queue { get; } = [];
     public readonly Dictionary<string, CommandInfo> Commands = [];
     public Configuration Config=new(){Language="ja"};
+    public string ConfigDirectory=Path.GetFullPath("artifacts/host-config");
     public bool Pvp;
     public bool ThrowOnRead;
     public bool PlayerAvailable = true;
@@ -190,7 +233,7 @@ sealed class Host
             case "AddHandler": Commands.Add((string)args[0]!, (CommandInfo)args[1]!); return true;
             case "RemoveHandler": return Commands.Remove((string)args[0]!);
             case "GetPluginConfig": return Config;
-            case "GetPluginConfigDirectory": return Path.GetFullPath("artifacts/host-config");
+            case "GetPluginConfigDirectory": return ConfigDirectory;
             case "get_UiLanguage": return "en";
             case "get_ClientLanguage": return ClientLanguage.Japanese;
             case "get_IsLoggedIn": return true;

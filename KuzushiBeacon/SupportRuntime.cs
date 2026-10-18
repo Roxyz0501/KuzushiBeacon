@@ -20,7 +20,7 @@ public sealed partial class Plugin
     private readonly Dictionary<int,(string Text,double Until,int Priority)> alerts=[];
     private readonly AlertLatch alertLatch=new();
     private readonly LocalSound localSound=new();
-    private readonly Queue<object> preDeath=[];
+    private readonly Queue<DeathState> preDeath=[];
     private readonly List<ReviewRecord> reviewHistory=[];
     private readonly Dictionary<string,long> commandCounts=[], failureCounts=[];
     private readonly Dictionary<string,(double Ms,long Calls)> costs=[];
@@ -37,10 +37,11 @@ public sealed partial class Plugin
     private Vector3 allyCenter,retreatDirection;
     private Observation? focusedEnemy, currentObservation;
     private Actor? recommended;
-    private string requestState="待機 / Idle";
+    private int requestPhase;
+    private string requestState=>requestPhase switch {1=>L("要求済み","Requested"),2=>L("LB消費確認","LB consumption observed"),_=>L("待機","Idle")};
     private DateTimeOffset? reviewStarted;
     private Task reviewWrite=Task.CompletedTask;
-    private readonly List<object> deathRecords=[];
+    private readonly List<DeathRecord> deathRecords=[];
     private string reviewStatus="";
     private long supportScans, supportReads, supportDraws;
     private bool coveragePartial;
@@ -50,16 +51,17 @@ public sealed partial class Plugin
     private bool NotificationsAllowed=>S.Notifications&&!S.DisabledGroups.Contains(5);
     private string L(string ja,string en)=>config.Language=="ja"?ja:en;
     private sealed record ReviewRecord(DateTimeOffset Started,DateTimeOffset Ended,string Note,Dictionary<string,float>? Settings,double? FullSeconds,int? Opportunities,
-        int? Peak,Dictionary<string,long>? Commands,Dictionary<string,long>? Failures,object[] Deaths);
+        int? Peak,Dictionary<string,long>? Commands,Dictionary<string,long>? Failures,DeathRecord[] Deaths);
+    private sealed record DeathState(uint Hp,uint Mp,uint[] Controls);
+    private sealed record DeathRecord(DateTimeOffset At,int? Enemies,int? Allies,double? Survival,DeathState[] States);
 
     private unsafe static bool Ready(uint action,ulong target)
     {var manager=ActionManager.Instance();return manager!=null&&manager->GetActionStatus(ActionType.Action,action,target)==0;}
 
     private void SupportUpdate(double now)
     {
-        if(!S.NeedsMonitor){if(sharedSnapshot)ClearSupport();return;}
+        if(!S.NeedsMonitor){if(supportAt!=0||sharedSnapshot)ClearSupport(false);return;}
         if(now<nextSupport)return;
-        nextSupport=now+S.UpdateMs/1000d;
         var watch=Stopwatch.StartNew();
         var player=objects.LocalPlayer;
         if(player is null || !player.IsValid()){ClearSupport();return;}
@@ -67,9 +69,9 @@ public sealed partial class Plugin
         var elapsed=lastSupportTime==0?0:Math.Clamp(now-lastSupportTime,0,1);
         lastSupportTime=now;
         var legacy=!S.DisabledGroups.Contains(2)&&player.ClassJob.RowId==Rules.SamuraiJob&&(config.ShowLine||config.ShowMarker||config.ShowMaxCount);
-        var anyStatus=!On(96)||Enumerable.Range(31,8).Any(On)||Enumerable.Range(50,6).Any(On);
-        var needOthers=legacy||!On(96)||Enumerable.Range(16,30).Any(id=>id is not (25 or 26 or 30 or 37 or 39 or 42 or 43 or 44)&&On(id))
-            ||Enumerable.Range(56,20).Any(On)||On(88)||On(89)||On(92);
+        nextSupport=now+S.SnapshotInterval(legacy,config.ScanIntervalMs)/1000d;
+        var anyStatus=S.NeedsSelfStatuses;
+        var needOthers=S.NeedsOtherActors(legacy);
         var needRates=On(27)||On(28)||On(47);
         observations.Clear();areaCandidates.Clear(); selfControls.Clear();
         chiten=guardTime=resilience=0;
@@ -93,14 +95,14 @@ public sealed partial class Plugin
         healingCast=On(59)&&player.IsCasting&&player.CastActionId==29055;
         RecordCost("39/50/52 LB + readiness",watch.Elapsed.TotalMilliseconds-readinessStart);
         int visited=0; bool approachingEnemy=false; nearbyEnemies=nearbyAllies=focusEnemies=sharedTarget=0;nearestAlly=float.PositiveInfinity;allyCenter=Vector3.Zero;
-        var needsEnemyStatus=legacy||anyStatus||S.ExcludeGuard||S.ExcludeInvulnerable||On(40)||On(41)||On(45)||On(88)||On(89);
+        var needsEnemyStatus=S.NeedsEnemyStatuses(legacy);
         sharedSnapshot=legacy;
         if(needOthers)
         foreach(var entry in objects.PlayerObjects)
         {
             if(visited++ >= (On(97)?S.MaxActors:Tracker.MaxCandidates))break;
             if(entry is not IPlayerCharacter p || !p.IsValid() || p.EntityId==player.EntityId||p.IsDead||p.CurrentHp==0||!p.IsTargetable)continue;
-            if(!LowHpTarget.InRange(player.Position,player.HitboxRadius,p.Position,p.HitboxRadius,Math.Max(35,Math.Max(config.MaxDistance,S.NearbyRange))))continue;
+            if(p.GameObjectId!=trackedAlly&&!LowHpTarget.InRange(player.Position,player.HitboxRadius,p.Position,p.HitboxRadius,Math.Max(35,Math.Max(config.MaxDistance,S.NearbyRange))))continue;
             bool enemy=GameLowHpTarget.Enemy(p),ally=!enemy&&GameLowHpTarget.Ally(p);
             if(!enemy&&!ally)continue;
             float own=0,other=0;bool guard=false,invulnerable=false;
@@ -176,7 +178,6 @@ public sealed partial class Plugin
         if(On(88)&&opportunity&&!previousOpportunity)opportunities++;
         var hpPercent=player.MaxHp==0?100:100f*player.CurrentHp/player.MaxHp;
         var low=hpPercent<=S.LowHpPercent&&!player.IsDead;
-        if(On(93)&&On(46)&&low&&lowHpSince==0)lowHpSince=now;
         if(On(93)&&!low&&!player.IsDead)lowHpSince=0;
         Alert(24,areaCandidates.Count>0&&areaCandidates[0].Count>=S.AlertCount,now,2);
         Alert(33,marked.Any(o=>!previousMarked.Contains(o.Actor.ObjectId)),now,2,false);
@@ -184,6 +185,8 @@ public sealed partial class Plugin
         Alert(35,previousOwn>0&&marked.Length==0,now,1,false);
         Alert(39,fullLb,now,2);Alert(40,opportunity,now,3);
         Alert(46,low,now,10);Alert(47,!player.IsDead&&selfHpRate<=-S.RapidLossPercent,now,9);
+        if(On(93)&&On(46)&&NotificationsAllowed&&low&&alerts.ContainsKey(46)&&lowHpSince==0)lowHpSince=now;
+        if(!On(93))lowHpSince=0;
         Alert(48,!player.IsDead&&player.CurrentMp<S.LowMp,now,5);
         Alert(57,focusEnemies>=S.FocusCount,now,8);
         Alert(58,nearbyEnemies-previousNear>=S.NearbyIncrease,now,7,false);
@@ -193,17 +196,16 @@ public sealed partial class Plugin
         var tracked=observations.Where(o=>o.Ally&&o.Actor.ObjectId==trackedAlly).Select(o=>(Observation?)o).FirstOrDefault();
         Alert(68,tracked is {} t&&t.Distance(player.Position,player.HitboxRadius)>S.Separation,now,4);
         if(On(60)&&!player.IsDead&&now>=nextPreDeath)
-        {nextPreDeath=now+.5;preDeath.Enqueue(new {Hp=player.CurrentHp,Mp=player.CurrentMp,Controls=selfControls.Select(c=>c.Id).ToArray()});while(preDeath.Count>10)preDeath.Dequeue();}
+        {nextPreDeath=now+.5;preDeath.Enqueue(new(player.CurrentHp,player.CurrentMp,selfControls.Select(c=>c.Id).ToArray()));while(preDeath.Count>10)preDeath.Dequeue();}
         if(player.IsDead&&!previousDead&&(On(60)||On(92)||On(93)))
         {
-            deathRecords.Add(new { At=DateTimeOffset.UtcNow, Enemies=On(92)?(int?)nearbyEnemies:null,Allies=On(92)?(int?)nearbyAllies:null,
-                Survival=On(93)&&lowHpSince>0?(double?)(now-lowHpSince):null,States=On(60)?preDeath.ToArray():[] });
+            deathRecords.Add(new(DateTimeOffset.UtcNow,On(92)?nearbyEnemies:null,On(92)?nearbyAllies:null,
+                On(93)&&lowHpSince>0?now-lowHpSince:null,On(60)?preDeath.ToArray():[]));
             if(deathRecords.Count>50)deathRecords.RemoveAt(0);preDeath.Clear();lowHpSince=0;
         }
         previousDead=player.IsDead;previousFull=fullLb;previousOpportunity=opportunity;previousOwn=marked.Length;
         previousMarked=marked.Select(o=>o.Actor.ObjectId).ToHashSet();previousNear=nearbyEnemies;previousFocus=focusEnemies;
-        if(zantetsukenAction.Gate.Pending)requestState=L("要求済み","Requested");
-        else if(requestState is "要求済み" or "Requested"&&!fullLb)requestState=L("LB消費確認","LB consumption observed");
+
         supportAt=now;supportScans++;supportReads+=visited;RecordCost("total",watch.Elapsed.TotalMilliseconds);
     }
     private void RecordCost(string name,double ms)
@@ -221,28 +223,28 @@ public sealed partial class Plugin
     private void PlayAlerts(double now)
     {
         if(!NotificationsAllowed||!S.Sound||now<muteUntil)return;
-        var candidates=alerts.Where(a=>a.Value.Until>now&&a.Value.Until>lastSoundAlert);
+        var candidates=alerts.Where(a=>On(a.Key)&&a.Value.Until>now&&a.Value.Until>lastSoundAlert);
         var selected=On(79)?candidates.OrderByDescending(a=>a.Value.Priority).FirstOrDefault():candidates.OrderBy(a=>a.Key).FirstOrDefault();
         if(selected.Value.Until<=0)return;
         lastSoundAlert=alerts.Values.Max(a=>a.Until);
         var tone=On(80)?selected.Key is >=33 and <=35?S.KuzushiTone:selected.Key is 39 or 40?S.LbTone:S.DangerTone:0;
         localSound.Play(now,S.Volume,tone);
     }
-    private void ClearSupport()
+    private void ClearSupport(bool clearTracking=true)
     {
         observations.Clear();areaCandidates.Clear();hpHistory.Clear();approachDistances.Clear();alerts.Clear();alertLatch.Clear();previousMarked.Clear();
         previousFull=previousOpportunity=previousDead=false;previousOwn=previousNear=previousFocus=0;
-        supportAt=nextSupport=lastSupportTime=lowHpSince=0;recommended=null;trackedAlly=0;sharedSnapshot=false;supportLbCount=0;attackCandidates=[];
-        localSound.Stop();
+        supportAt=nextSupport=lastSupportTime=lowHpSince=0;recommended=null;if(clearTracking)trackedAlly=0;sharedSnapshot=false;supportLbCount=0;attackCandidates=[];
+        localSound.Stop();lastSoundAlert=0;currentObservation=null;currentCoverage=default;coveragePartial=false;selfControls.Clear();
     }
     private bool reviewCompleted;
     private void SupportDutyStarted(Dalamud.Game.DutyState.IDutyStateEventArgs _)
-    { FinishReview(); reviewCompleted=false; Reconcile(); if(client.IsPvPExcludingDen&&On(86))reviewStarted=DateTimeOffset.UtcNow; }
+    { FinishReview(); reviewCompleted=false; Reconcile(); if(config.Enabled&&client.IsPvPExcludingDen&&On(86))reviewStarted=DateTimeOffset.UtcNow; }
     private void SupportDutyEnded(Dalamud.Game.DutyState.IDutyStateEventArgs _)
     { FinishReview(); reviewCompleted=true; }
     private void FinishReview()
     {
-        if(reviewStarted is {} started)
+        if(config.Enabled&&On(86)&&reviewStarted is {} started)
         {
             var record=new ReviewRecord(started,DateTimeOffset.UtcNow,On(94)?S.MatchNote:"",On(94)?new Dictionary<string,float>{{"MeleeRange",S.MeleeRange},{"RangedRange",S.RangedRange},{"AreaRadius",S.AreaRadius},{"LowHpPercent",S.LowHpPercent},{"AlertCount",S.AlertCount}}:null,On(87)?fullSeconds:null,
                 On(88)?opportunities:null,On(89)?peakCoverage:null,On(90)?new(commandCounts):null,On(91)?new(failureCounts):null,deathRecords.ToArray());
@@ -253,7 +255,7 @@ public sealed partial class Plugin
     }
     private void QueueReviewWrite(bool export)
     {
-        var snapshot=reviewHistory.ToArray();var dir=Path.Combine(pi.GetPluginConfigDirectory(),"support-review");
+        var snapshot=(export?reviewHistory.TakeLast(20):reviewHistory).ToArray();var dir=Path.Combine(pi.GetPluginConfigDirectory(),"support-review");
         var file=export?$"anonymous-{DateTime.UtcNow:yyyyMMdd-HHmmssfff}.json":"matches.json";
         reviewWrite=reviewWrite.ContinueWith(_=>
         {
