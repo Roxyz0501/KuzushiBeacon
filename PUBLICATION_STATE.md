@@ -1,3 +1,14 @@
+## 2026-10-19 — PvP Supporter 1.1.0.0 expansion + Ledger integration
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.0
+- Source/tag commit: 5ae977749d45366f0274427363dc1f5ff3a2425f.
+- Public ZIP: https://github.com/Roxyz0501/KuzushiBeacon/releases/download/v1.1.0.0/KuzushiBeacon-1.1.0.0.zip
+- ZIP: 163,106 bytes; SHA-256 8BB00FB70FBF77534011D24D9E0E66A49E97C4CE06282C8F4529EF99E1874BA6. Anonymous redownload matched. Eight-entry allowlist and version/internal identity verified; repository HTTP 200, icon image/png.
+- Shared index commit: 50ff9f6eb24a3427ee21e4c0d59f29375af6223e. Connector, anonymous pinned index and ordinary main/repo.json all returned 1.1.0.0; other ten entries unchanged.
+- Added fixed/job-based targeting, nearest/ally/assist commands, Guard/known-immunity filters, individually configurable assistance, category tabs, audio controls, bounded anonymous review and integrated optional PvP Ledger. Standard common tabs unchanged. InternalName and old aliases/settings preserved.
+- Validation: 206 managed checks, 48 real-host lifecycle checks, 2,781 integrated Ledger checks, 44 headless production UI frames, four regional font glyph checks; build zero warnings/errors. No live-game validation, real webhook test or unpublished installed-file overwrite.
+- New assistance UI: Japanese/English, English fallback for other selections. Existing/ledger UI remains seven-language. Spatial predictions and observed statuses are bounded estimates. Native game behavior/performance remains unverified.
+
 # Publication state
 
 ## 2026-10-19 — PvP Supporter 1.0.0.7 (formerly Kuzushi Beacon)

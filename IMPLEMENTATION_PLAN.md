@@ -17,7 +17,7 @@ The original plugin identity, aliases, saved settings, common language/support t
 - [x] Resource budgets, expiry and metrics 96–100
 - [x] PvP Ledger KDA/feed, history/CSV and optional Discord integrated; licenses retained
 - [x] Regression/feature tests, build, package inspection
-- [ ] Public source/release/shared index verification (not local-only)
+- [x] Public source/release/shared index verification (not local-only)
 
 ## Evidence / limits
 
