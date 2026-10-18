@@ -1,5 +1,15 @@
 # Publication state
 
+## 2026-10-19 — Kuzushi Beacon 1.0.0.6 normal hotbar execution mode
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.6
+- ZIP: https://github.com/Roxyz0501/KuzushiBeacon/releases/download/v1.0.0.6/KuzushiBeacon-1.0.0.6.zip
+- Source/tag: be162fc275ac55a70ac681bc6970f0ebded3fe9c. ZIP: 62,712 bytes; SHA-256 3B77ACE9E8E601D6421F97E208F507D78F0BDA4F1929B5803D8C5EF021B2185F. Anonymous hash and six-entry manifest verified; repository HTTP 200 and icon image/png.
+- Shared index: 4b201a1d50671dbdd10d6c6a074252861b9f7a13. Connector and anonymous commit-pinned URL verified; other ten entries unchanged.
+- Uses UseActionMode.None, documented upstream as normal hotbar execution, instead of Macro. Existing preflight and target selection remain. No custom retries/packets; client standard queue handling permitted.
+- 85 managed + 34 host checks pass. Native hotbar parity remains unverified in game. Installed files not overwritten locally.
+
+
 ## 2026-10-19 — Kuzushi Beacon 1.0.0.5 overhead maximum count
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.0.0.5
