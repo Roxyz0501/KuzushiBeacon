@@ -1,6 +1,7 @@
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using NativeObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
 namespace KuzushiBeacon;
@@ -14,6 +15,22 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
         var actor = objects[candidate.Index];
         return actor is not null && actor.IsValid() && actor.EntityId == candidate.EntityId
             && actor.GameObjectId == candidate.ObjectId && !actor.IsDead && actor.IsTargetable ? actor : null;
+    }
+
+    public static bool IsLimitBreakFull()
+    {
+        var gauge = LimitBreakController.Instance();
+        return gauge != null && Zantetsuken.FullGauge(gauge->IsPvP, gauge->CurrentUnits, gauge->BarUnits, gauge->BarCount);
+    }
+
+    // Display depends on gauge fullness and reach, not temporary cast/animation locks.
+    public bool CanReach(Actor candidate)
+    {
+        var actor = Resolve(candidate);
+        var player = objects.LocalPlayer;
+        return actor is not null && player is not null && player.IsValid()
+            && ActionManager.CanUseActionOnTarget(Zantetsuken.ActionId, (NativeObject*)actor.Address)
+            && ActionManager.GetActionInRangeOrLoS(Zantetsuken.ActionId, (NativeObject*)player.Address, (NativeObject*)actor.Address) == 0;
     }
 
     public bool CanUse(Actor candidate)

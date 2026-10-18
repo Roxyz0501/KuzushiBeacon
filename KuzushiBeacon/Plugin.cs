@@ -14,7 +14,10 @@ public sealed class Plugin : IDalamudPlugin
     private const string ExecuteCommand = "/kuzushizantetsuken";
     private readonly ITargetManager targets;
     private readonly IChatGui chat;
-    private readonly IZantetsukenAction zantetsukenAction;
+    private readonly GameZantetsukenAction zantetsukenAction;
+    private readonly List<Actor> countCandidates = new(Tracker.MaxTargets);
+    private int maximumCount;
+    private double countExpiresAt;
     private double nextCommand;
     private const string Command = "/kuzushibeacon";
     private readonly IDalamudPluginInterface pi;
@@ -110,7 +113,7 @@ public sealed class Plugin : IDalamudPlugin
         ImGui.SetNextItemWidth(-1);
         return "###" + key;
     }
-    private bool MonitoringAllowed() => !disposed && !faulted && config.Enabled && (config.ShowLine || config.ShowMarker)
+    private bool MonitoringAllowed() => !disposed && !faulted && config.Enabled && (config.ShowLine || config.ShowMarker || config.ShowMaxCount)
         && client.IsLoggedIn && client.IsPvPExcludingDen;
 
     private void Reconcile() => _ = ReconcileAsync();
@@ -148,6 +151,9 @@ public sealed class Plugin : IDalamudPlugin
             subscribed = false;
         }
         tracker.Clear();
+        maximumCount = 0;
+        countExpiresAt = 0;
+        countCandidates.Clear();
         trackedOwner = 0;
     }
 
@@ -173,11 +179,32 @@ public sealed class Plugin : IDalamudPlugin
             if (player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead)
             {
                 tracker.Clear();
+                maximumCount = 0;
                 trackedOwner = 0;
                 return;
             }
             trackedOwner = player.EntityId;
-            tracker.Update(true, Now, player.EntityId, player.Position, config.MaxDistance, config.ScanIntervalMs, world);
+            var previousScan = tracker.ScanCount;
+            var now = Now;
+            // Reuse one bounded scan for both overlays. Count must not depend on highlight distance.
+            tracker.Update(true, now, player.EntityId, player.Position,
+                config.ShowMaxCount ? float.MaxValue : config.MaxDistance, config.ScanIntervalMs, world);
+            if (previousScan == tracker.ScanCount) return;
+            maximumCount = 0;
+            countExpiresAt = 0;
+            if (config.ShowMaxCount && tracker.Targets.Count > 0 && GameZantetsukenAction.IsLimitBreakFull())
+            {
+                countCandidates.Clear();
+                countExpiresAt = double.MaxValue;
+                foreach (var target in tracker.Targets)
+                {
+                    if (now >= target.ExpiresAt) continue;
+                    countCandidates.Add(target.Actor);
+                    countExpiresAt = Math.Min(countExpiresAt, target.ExpiresAt);
+                }
+                maximumCount = Zantetsuken.FindBest(countCandidates, player.Position,
+                    targets.Target?.GameObjectId ?? 0, zantetsukenAction.CanReach).Count;
+            }
         }
         catch (Exception ex) { Fail(ex); }
     }
@@ -191,6 +218,18 @@ public sealed class Plugin : IDalamudPlugin
             if (player is null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob || player.IsDead || player.EntityId != trackedOwner) return;
             var now = Now;
             var draw = ImGui.GetBackgroundDrawList();
+            if (config.ShowMaxCount && maximumCount > 0
+                && Zantetsuken.ShowCount(GameZantetsukenAction.IsLimitBreakFull(), maximumCount, countExpiresAt, now)
+                && Project(player.Position + Vector3.UnitY * config.MarkerHeight, out var countHead))
+            {
+                var text = maximumCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var font = ImGui.GetFont();
+                var size = ImGui.GetFontSize() * 1.5f;
+                var width = ImGui.CalcTextSize(text).X * 1.5f;
+                var position = countHead - new Vector2(width * 0.5f, size);
+                draw.AddText(font, size, position + Vector2.One, 0xFF000000, text);
+                draw.AddText(font, size, position, ImGui.ColorConvertFloat4ToU32(config.MarkerColor), text);
+            }
             var lineColor = ImGui.ColorConvertFloat4ToU32(config.LineColor);
             var markerColor = ImGui.ColorConvertFloat4ToU32(config.MarkerColor);
             Vector2 from = default;
@@ -297,6 +336,7 @@ public sealed class Plugin : IDalamudPlugin
         changed |= ImGui.ColorEdit4(Control("LineColor"), ref config.LineColor, ImGuiColorEditFlags.AlphaBar);
         changed |= ImGui.SliderFloat(Control("LineWidth"), ref config.LineWidth, 0.5f, 5f, "%.1f px");
         ImGui.Separator();
+        changed |= ImGui.Checkbox(Label("ShowMaxCount"), ref config.ShowMaxCount);
         changed |= ImGui.Checkbox(Label("ShowMarker"), ref config.ShowMarker);
         changed |= ImGui.ColorEdit4(Control("MarkerColor"), ref config.MarkerColor, ImGuiColorEditFlags.AlphaBar);
         changed |= ImGui.SliderFloat(Control("MarkerSize"), ref config.MarkerSize, 5f, 30f, "%.0f px");

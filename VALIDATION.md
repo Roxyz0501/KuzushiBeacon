@@ -1,5 +1,13 @@
 # Validation — 2026-10-19
 
+## 1.0.0.5 overhead maximum count
+
+- Gauge read uses host LimitBreakController IsPvP, CurrentUnits, BarUnits and BarCount; requires positive units/bars and current >= units * bars. No action execution is used to query readiness. Full gauge is distinct from temporary action lock.
+- Shared FindBest selection returns maximum total own-Kuzushi count including center. Display uses native reach/target eligibility without GetActionStatus, so cast locks do not imply an empty gauge. No target setter/UseAction on the display path.
+- Existing Tracker scan is reused, with up to 200 player/status candidates independent of highlight distance while count is enabled. Maximum 40,000 distance comparisons per scan; zero additional enemy/status scans during drawing. Numeric drawing rechecks only gauge fields and cached expiry. Full calculation occurs at ScanIntervalMs (default 100ms); if no own targets or LB is not full, no coverage calculation.
+- 85 managed + 34 host checks pass, including partial/full/invalid/PvE gauge, consumed LB, empty/expired snapshot, maximum count including center, unreachable centers and zero execution attempts during selection. Outside-PvP tests remain green.
+- These are deterministic tests/implementation bounds, not live CPU or game acceptance measurements. Native gauge values, numeric positioning, collision geometry and actual hit count remain unverified in game.
+
 ## 1.0.0.4 explicit Zantetsuken command
 
 - Current game Action sheet: 29537 = PvP Zantetsuken, Range 20, EffectRange 5, CastType 2. Official Samurai job guide agrees on target-centered 5m AoE and 20m range.

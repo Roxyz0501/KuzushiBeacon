@@ -28,12 +28,19 @@ public static class Zantetsuken
             var remaining = world.OwnKuzushiRemaining(actor.Index, owner);
             if (float.IsFinite(remaining) && remaining > 0) candidates.Add(actor);
         }
+        var selection = FindBest(candidates, origin, currentTarget, action.CanUse);
+        return selection.Target is { } selected && action.TryExecute(selected, owner);
+    }
+
+    public static (Actor? Target, int Count) FindBest(IReadOnlyList<Actor> candidates, Vector3 origin,
+        ulong currentTarget, Func<Actor, bool> canSelect)
+    {
         Actor? best = null;
         int bestCount = -1;
         float bestDistance = float.MaxValue;
         foreach (var center in candidates)
         {
-            if (!action.CanUse(center)) continue;
+            if (!canSelect(center)) continue;
             int count = 0;
             foreach (var other in candidates)
                 if (Vector3.DistanceSquared(center.Position, other.Position) <= Radius * Radius) count++;
@@ -44,9 +51,14 @@ public static class Zantetsuken
             if (count > bestCount || (count == bestCount && preferred))
             { best = center; bestCount = count; bestDistance = distance; }
         }
-        // At most one execution attempt. Never retry a rejected action or fall back to an unmarked target.
-        return best is { } selected && action.TryExecute(selected, owner);
+        return (best, Math.Max(0, bestCount));
     }
+
+    public static bool FullGauge(bool pvp, int current, int barUnits, int bars)
+        => pvp && bars > 0 && barUnits > 0 && current >= (long)barUnits * bars;
+
+    public static bool ShowCount(bool fullGauge, int count, double expiresAt, double now)
+        => fullGauge && count > 0 && now < expiresAt;
 
     private static bool Finite(Vector3 p) => float.IsFinite(p.X) && float.IsFinite(p.Y) && float.IsFinite(p.Z);
 }

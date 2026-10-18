@@ -11,6 +11,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool Enabled = true;
     public bool ShowLine = true;
     public bool ShowMarker = true;
+    public bool ShowMaxCount = true;
     public Vector4 LineColor = new(1f, 0.32f, 0.12f, 0.85f);
     public Vector4 MarkerColor = new(1f, 0.75f, 0.12f, 1f);
     public float LineWidth = 1.5f;

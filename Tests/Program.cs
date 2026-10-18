@@ -138,6 +138,25 @@ Check(cfg.LineWidth == 1.5f && cfg.MarkerSize == 30 && cfg.LineColor == new Vect
     Zantetsuken.Execute(true, 10, Vector3.Zero, 0, w, action);
     Check(w.StatusReads - reads == 200 && action.Checks - evaluations == 200, "command scan and native availability checks bounded to 200");
 }
+Check(Zantetsuken.FullGauge(true, 10000, 10000, 1), "PvP full gauge");
+Check(!Zantetsuken.FullGauge(true, 9999, 10000, 1), "partial gauge hidden");
+Check(!Zantetsuken.FullGauge(false, 10000, 10000, 1), "PvE gauge hidden");
+Check(!Zantetsuken.FullGauge(true, 0, 0, 0), "uninitialized gauge hidden");
+Check(Zantetsuken.ShowCount(true, 3, 10, 9), "full LB and live own targets visible");
+Check(!Zantetsuken.ShowCount(false, 3, 10, 9), "consumed LB hides existing count immediately");
+Check(!Zantetsuken.ShowCount(true, 0, 10, 9), "no own targets hides number");
+Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
+{
+    var actors = new[] {
+        new Actor(0, 100, 100, new Vector3(10, 0, 0), true, true),
+        new Actor(1, 101, 101, new Vector3(14, 0, 0), true, true),
+        new Actor(2, 102, 102, new Vector3(18, 0, 0), true, true) };
+    var action = new FakeAction();
+    var selection = Zantetsuken.FindBest(actors, Vector3.Zero, 0, action.CanUse);
+    Check(selection.Count == 3 && selection.Target?.Index == 1, "head count includes center and maximum additional targets");
+    Check(action.Attempts == 0, "count-only computation never executes action");
+    Check(Zantetsuken.FindBest(actors, Vector3.Zero, 0, _ => false).Count == 0, "unreachable centers produce no count");
+}
 Console.WriteLine($"PASS {checks} checks; localization complete for {Loc.Languages.Length} languages.");
 
 sealed class FakeWorld : IHighlightWorld
