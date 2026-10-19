@@ -1,3 +1,13 @@
+# 1.1.0.4 request recovery — 2026-10-19
+
+- 320 managed checks, including rejected request with unrelated queue, local queue cancellation, queue execution/sequence wrap, false return with sequence advancement, duplicate suppression, passive timeout does not recover, manual recovery blocked while busy/queued, delayed explicit recovery, consumption and unrelated later action activity.
+- 59 real-Plugin host lifecycle checks pass. Native game action execution is not simulated by these host tests; live PvP validation remains outstanding.
+- Normal UseActionMode.None retained. Read-only queue/type/ID, sequence, cast and animation-lock observation; no hooks, custom packets, native-state writes or automatic retries.
+- Unknown-result recovery waits at least three seconds and requires a fresh explicit command, full gauge and idle client, then existing eligibility/range/status/minimum-count checks. This timeout is NOT proof of server rejection; extremely delayed outcomes remain unverified.
+- Request observation runs only while pending, reads constant-size native fields and adds no actor/status scans or LB geometry when gauge is not full. Ordinary frame observation cannot execute an action.
+- Standard common tabs and installed plugin files untouched.
+- Native API reference: https://github.com/aers/FFXIVClientStructs/blob/main/FFXIVClientStructs/FFXIV/Client/Game/ActionManager.cs (None = hotbar; Macro = no queue).
+
 # 1.1.0.3 hierarchy validation — 2026-10-19
 
 - 307 managed checks: hierarchy gates, timer-only expiry color, LB-only display condition, shared LB alert independent from Samurai parents, duplicate alert migration in all profiles, migration of disabled legacy Samurai category.

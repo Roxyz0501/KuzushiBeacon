@@ -109,13 +109,19 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             await framework.RunOnFrameworkThread(() =>
             {
-                if (disposed || Now - requestedAt > 0.5 || Now < nextCommand || zantetsukenAction.Gate.Pending) return;
+                if (disposed || Now - requestedAt > 0.5 || Now < nextCommand) return;
                 nextCommand = Now + 0.25;
                 if (!config.Enabled || !S.ZantetsukenSupport || !client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable(); return; }
                 var player = objects.LocalPlayer;
                 if (player is null || !player.IsValid() || player.IsDead || player.ClassJob.RowId != Rules.SamuraiJob)
                 { CommandUnavailable(); return; }
                 if (!GameZantetsukenAction.IsLimitBreakFull()) { CountCommand(targetOnly?"ztarget":"zantetsuken",false,"LB not full"); CommandUnavailable(); return; }
+                if (!targetOnly)
+                {
+                    zantetsukenAction.ObserveRequest(Now, true, explicitPress: true);
+                    if (zantetsukenAction.Gate.Pending) return;
+                    requestPhase = 0;
+                }
                 zantetsukenAction.TargetOnly = targetOnly;
                 try
                 {
@@ -152,7 +158,11 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             if (!client.IsLoggedIn || !client.IsPvPExcludingDen) zantetsukenAction.Gate.Reset();
             else if (GameZantetsukenAction.TryReadGauge(out var full))
-            {zantetsukenAction.Gate.Observe(full);if(!full)requestPhase=2;}
+            {
+                zantetsukenAction.ObserveRequest(Now, full);
+                if (!full) requestPhase = 2;
+                else if (!zantetsukenAction.Gate.Pending) requestPhase = 0;
+            }
         }
         catch (Exception ex) { if (messages.Message(Now)) log.Error(ex, "Could not observe pending LB request; retry remains blocked."); }
         if (!zantetsukenAction.Gate.Pending && observingRequest)

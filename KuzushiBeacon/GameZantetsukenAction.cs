@@ -54,10 +54,23 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
         var manager = ActionManager.Instance();
         var player = objects.LocalPlayer;
         return actor is not null && player is not null && player.IsValid() && manager != null
-            && !(manager->ActionQueued && manager->QueuedActionId == Zantetsuken.ActionId)
+            && !OwnActionQueued(manager)
             && ActionManager.CanUseActionOnTarget(Zantetsuken.ActionId, (NativeObject*)actor.Address)
             && ActionManager.GetActionInRangeOrLoS(Zantetsuken.ActionId, (NativeObject*)player.Address, (NativeObject*)actor.Address) == 0
             && manager->GetActionStatus(ActionType.Action, Zantetsuken.ActionId, actor.GameObjectId) == 0;
+    }
+
+    private static bool OwnActionQueued(ActionManager* manager) => manager->ActionQueued
+        && manager->QueuedActionType == ActionType.Action && manager->QueuedActionId == Zantetsuken.ActionId;
+
+    public void ObserveRequest(double now, bool fullGauge, bool explicitPress = false)
+    {
+        Gate.Observe(fullGauge);
+        if (!Gate.Pending) return;
+        var manager = ActionManager.Instance();
+        if (manager == null) return; // Unknown native state cannot authorize another request.
+        Gate.Observe(now, fullGauge, OwnActionQueued(manager), manager->LastUsedActionSequence,
+            !manager->ActionQueued && manager->CastTimeTotal <= 0 && manager->AnimationLock <= 0, explicitPress);
     }
 
     public bool TryExecute(Actor candidate, uint owner)
@@ -79,9 +92,8 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
         var sequence = manager->LastUsedActionSequence;
         var accepted = manager->UseAction(ActionType.Action, Zantetsuken.ActionId,
             actor.GameObjectId, mode: ActionManager.UseActionMode.None);
-        // A queued request or changed sequence also counts as issued, even if return is false.
-        if (!accepted && !manager->ActionQueued && manager->LastUsedActionSequence == sequence)
-            Gate.Rejected(System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency);
+        Gate.Result(System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency,
+            accepted, OwnActionQueued(manager), sequence, manager->LastUsedActionSequence);
         return accepted || Gate.Pending;
     }
 }
