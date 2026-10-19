@@ -1,3 +1,12 @@
+## 2026-10-19 — PvP Supporter 1.1.0.4 request recovery
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.4
+- Source/tag: 88249fa08789de3a6a5a524fa8466f1345b19f53.
+- ZIP: 183,446 bytes; SHA256 D99EB94D1F128583D02810E9490D28F00047E7DEE2DB6AFBBA601BED0AEC0604. Anonymous redownload matches; eight entries/version/internal identity verified; repository HTTP 200.
+- Shared index commit: d37f8f59030bd01f3652e36182512e264af0389f. Connector and ordinary anonymous main URL return 1.1.0.4; ten other entries unchanged.
+- Fixed indefinite pending latch after cancelled/failed LB. Only own LB queue counts. Unsent queue cancellation uses one-second backoff; unknown result recovery requires a new explicit press after at least three seconds, full gauge and idle client, followed by normal eligibility validation. Timeout is not proof of server rejection.
+- 320 managed regression checks and 59 real-host lifecycle checks pass; Release build zero warnings/errors. Hotbar mode retained; no automatic retries, custom packets or installed-file overwrite. Live PvP execution remains unverified.
+
 ## 2026-10-19 — PvP Supporter 1.1.0.3 hierarchy and styles
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.3
