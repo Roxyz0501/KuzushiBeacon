@@ -1,3 +1,12 @@
+## 2026-10-21 — PvP Supporter 1.1.0.5 explicit presses
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.5
+- Source/tag: 86c52d7f6ee39992d4b37d6f08c91c37ec0ff687.
+- ZIP: 183,277 bytes; SHA256 A24FBE927A089F64AF1DC54379372D0B018F640A57290206C26E7E290791169C. Anonymous download matches; eight entries/version/internal identity verified; repository HTTP 200.
+- Shared index commit: 3b44cb5af1da34a7269cd777e6a758d5e054369a. Connector and ordinary anonymous main URL both verified at 1.1.0.5; other entries unchanged.
+- Explicit user instruction supersedes former request-lock policy: every eligible explicit press selects afresh and invokes normal UseAction(None) once. Removed time/staleness throttles, pending filter and readiness pre-rejection. Candidate conditions and error-text throttle remain. No automatic retries or custom packets.
+- 343 managed checks, 62 real-host checks and zero-warning/error Release build. Real command burst dispatch verified; native in-game execution unverified. Installed files untouched.
+
 ## 2026-10-19 — PvP Supporter 1.1.0.4 request recovery
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.4
