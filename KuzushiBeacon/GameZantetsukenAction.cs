@@ -46,19 +46,8 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
             && ActionManager.GetActionInRangeOrLoS(Zantetsuken.ActionId, (NativeObject*)player.Address, (NativeObject*)actor.Address) == 0;
     }
 
-    public bool CanUse(Actor candidate)
-    {
-        if (!Included(candidate)) return false;
-        if (TargetOnly) return CanReach(candidate);
-        var actor = Resolve(candidate);
-        var manager = ActionManager.Instance();
-        var player = objects.LocalPlayer;
-        return actor is not null && player is not null && player.IsValid() && manager != null
-            && !OwnActionQueued(manager)
-            && ActionManager.CanUseActionOnTarget(Zantetsuken.ActionId, (NativeObject*)actor.Address)
-            && ActionManager.GetActionInRangeOrLoS(Zantetsuken.ActionId, (NativeObject*)player.Address, (NativeObject*)actor.Address) == 0
-            && manager->GetActionStatus(ActionType.Action, Zantetsuken.ActionId, actor.GameObjectId) == 0;
-    }
+    // Candidate eligibility only. Native UseAction owns readiness and queue handling.
+    public bool CanUse(Actor candidate) => CanReach(candidate);
 
     private static bool OwnActionQueued(ActionManager* manager) => manager->ActionQueued
         && manager->QueuedActionType == ActionType.Action && manager->QueuedActionId == Zantetsuken.ActionId;
@@ -85,10 +74,13 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
         LastSelection = candidate;
         if (Options?.On(99) == true) return true;
         if (TargetOnly) { targets.Target = actor; return true; }
-        if (!Gate.Begin(System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency)) return false;
+        // Diagnostic state only: a previous request must never suppress a new explicit press.
+        var manager = ActionManager.Instance();
+        if (manager == null) return false;
+        Gate.Reset();
+        Gate.Begin(System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency);
         targets.Target = actor;
         // Same normal execution mode as a hotbar button press; client handles queueing/checks.
-        var manager = ActionManager.Instance();
         var sequence = manager->LastUsedActionSequence;
         var accepted = manager->UseAction(ActionType.Action, Zantetsuken.ActionId,
             actor.GameObjectId, mode: ActionManager.UseActionMode.None);

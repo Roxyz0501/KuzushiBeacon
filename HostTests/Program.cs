@@ -98,11 +98,23 @@ foreach (var pvp in new[] { false, true })
     using var plugin = host.Load();
     for (int i = 0; i < 20; i++)
     {
-        typeof(Plugin).GetField("nextCommand", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(plugin, 0d);
         host.Commands["/kuzushizantetsuken"].Handler("/kuzushizantetsuken", "");
     }
     Check(host.ChatMessages == 1, "real command suppresses repeated unavailable messages");
     Check(host.ObjectReads == 0, "unavailable command spam never scans objects");
+}
+{
+    var host = new Host { Pvp = true, Job = 0 };
+    using var plugin = host.Load();
+    var adapter = typeof(Plugin).GetField("zantetsukenAction", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(plugin)!;
+    var observation = (RequestGate)adapter.GetType().GetProperty("Gate")!.GetValue(adapter)!;
+    observation.Begin(0);
+    var reads = host.ObjectReads;
+    for (var press = 0; press < 20; press++)
+        host.Commands["/kuzushizantetsuken"].Handler("/kuzushizantetsuken", "");
+    Check(host.ObjectReads - reads == 20, "every immediate command revalidates player even with prior request pending");
+    Check(host.ChatMessages == 1, "error text remains throttled independently from input");
+    Check(host.Errors == 0, "repeat dispatch needs no native calls for invalid job");
 }
 {
     var host = new Host { Pvp = false };

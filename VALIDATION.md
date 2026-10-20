@@ -1,3 +1,11 @@
+# 1.1.0.5 explicit press semantics — 2026-10-21
+
+- 343 managed checks: 21 consecutive explicit selection/execution calls (initial simulated rejection followed by success) result in 21 attempts, with no automatic attempt; expired Kuzushi prevents the next attempt.
+- 62 real-host checks: 20 immediate production command dispatches all revalidate the player despite prior pending observation, while error text remains limited to one message. Existing outside-PvP zero-scan and disposal checks retained.
+- Removed command time/staleness throttle, pending gate, and GetActionStatus/queued-action pre-rejection. Production native entry remains exactly one UseAction(None) per eligible non-dry-run execution; request tracking is diagnostic only, reset on each press, never an input filter.
+- Candidate eligibility (own Kuzushi, range/LoS, exclusions, minimum count), PvP/SAM/alive/full gauge, and dry run remain intact. No automatic retry, queue override, packet construction or native-field writes.
+- No idle scan increase: selection is per explicit press; UI/gauge-triggered calculation is unchanged. Native in-game queueing, server acceptance and impact remain unverified.
+
 # 1.1.0.4 request recovery — 2026-10-19
 
 - 320 managed checks, including rejected request with unrelated queue, local queue cancellation, queue execution/sequence wrap, false return with sequence advancement, duplicate suppression, passive timeout does not recover, manual recovery blocked while busy/queued, delayed explicit recovery, consumption and unrelated later action activity.

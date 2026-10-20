@@ -24,7 +24,6 @@ public sealed partial class Plugin : IDalamudPlugin
     private int maximumCount;
     private readonly HashSet<ulong> eligibleHighlights=[];
     private double countExpiresAt;
-    private double nextCommand;
     private bool observingRequest;
     private bool previewCount;
     private readonly RequestGate messages = new();
@@ -104,24 +103,16 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private async Task ExecuteZantetsukenAsync(bool targetOnly = false)
     {
-        var requestedAt = Now;
         try
         {
             await framework.RunOnFrameworkThread(() =>
             {
-                if (disposed || Now - requestedAt > 0.5 || Now < nextCommand) return;
-                nextCommand = Now + 0.25;
+                if (disposed) return;
                 if (!config.Enabled || !S.ZantetsukenSupport || !client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable(); return; }
                 var player = objects.LocalPlayer;
                 if (player is null || !player.IsValid() || player.IsDead || player.ClassJob.RowId != Rules.SamuraiJob)
                 { CommandUnavailable(); return; }
                 if (!GameZantetsukenAction.IsLimitBreakFull()) { CountCommand(targetOnly?"ztarget":"zantetsuken",false,"LB not full"); CommandUnavailable(); return; }
-                if (!targetOnly)
-                {
-                    zantetsukenAction.ObserveRequest(Now, true, explicitPress: true);
-                    if (zantetsukenAction.Gate.Pending) return;
-                    requestPhase = 0;
-                }
                 zantetsukenAction.TargetOnly = targetOnly;
                 try
                 {

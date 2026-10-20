@@ -294,6 +294,20 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     var old=new Configuration {Version=2};old.Support.DisabledGroups.Add(2);old.Sanitize();
     Check(old.Version==3&&!old.Support.KuzushiDisplay&&!old.Support.ZantetsukenSupport&&!old.Support.SamuraiNotifications&&!old.Support.DisabledGroups.Contains(2),"disabled legacy Samurai category migrates to visible parent controls");
 }
+{
+    var pressWorld = new FakeWorld();
+    pressWorld.Actors.Add(new Actor(2, 2, 2, Vector3.Zero, true, true));
+    pressWorld.Statuses[2] = (3202, 1, 5);
+    var action = new FakeAction { Accept = false };
+    Check(!Zantetsuken.Execute(true, 1, Vector3.Zero, 0, pressWorld, action), "rejected explicit press calls action once");
+    action.Accept = true;
+    for (var press = 0; press < 20; press++)
+        Check(Zantetsuken.Execute(true, 1, Vector3.Zero, 0, pressWorld, action), "each repeated explicit press reaches action");
+    Check(action.Attempts == 21, "twenty-one presses produce exactly twenty-one attempts including initial rejection");
+    pressWorld.Statuses.Clear();
+    Check(!Zantetsuken.Execute(true, 1, Vector3.Zero, 0, pressWorld, action) && action.Attempts == 21,
+        "each press refreshes candidates; expired Kuzushi does not execute");
+}
 Console.WriteLine($"PASS {checks} checks; localization complete for {Loc.Languages.Length} languages.");
 
 sealed class FakeWorld : IHighlightWorld
