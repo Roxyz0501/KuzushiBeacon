@@ -1,3 +1,14 @@
+## 2026-10-22 — PvP Supporter 1.1.0.6 persistence audit
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.6
+- Source/tag: e726536d418989e2dc292fbab77fbb2e4c822722.
+- ZIP: 198,108 bytes; SHA256 E10B5081715AB47B8514E945A6E3D9C3CEF231E0BF362165C790776F9E5DFF45. Anonymous redownload equals local package and current Release DLL; eight entries, version and identity verified. Repository HTTP 200, icon image/png.
+- Shared index commit: bee76088d2f66e6408458dc65aae6343707e0886. Commit-pinned connector verifies 1.1.0.6; twelve other entries unchanged. Ordinary anonymous main URL initially cached 1.1.0.5 (CDN propagation).
+- 367 managed checks, 68 host checks, 2,789 Ledger checks and 487 headless production UI frames. Zero-warning/error Release build. Canonical HistoryFiles template byte-identical (SHA256 5BD56A3F0CD79F58CD673282C353E44782F4B4522AD93D46910CEE81A4DCDC8E).
+- Settings 60-second changed-only saves, three valid backups/recovery, logout/dispose flush. UTC date-partitioned per-match histories with old-format reads/idempotent review migration, paged all-date access, cached storage tab, bounded failure retries and background-task shutdown join.
+- Synthetic probes only: settings five successful commits / 65 payload bytes; two review records / 112 bytes; idle/reverted writes zero. Physical SSD/OS I/O and live-game behavior unverified. No production-data migration or installed DLL replacement.
+- Details: PERSISTENCE_AUDIT_2026-10-22.md. Parent shared specs/templates unchanged.
+
 ## 2026-10-21 — PvP Supporter 1.1.0.5 explicit presses
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.5
