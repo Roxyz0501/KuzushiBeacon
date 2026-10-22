@@ -190,6 +190,36 @@ foreach (var pvp in new[] { false, true })
     host.Commands["/kuzushizantetsuken"].Handler("/kuzushizantetsuken","");
     Check(host.ObjectReads==0,"LB support parent blocks command before native/game object access");
 }
+{
+    var host=new Host {Pvp=false};var plugin=host.Load();
+    host.Config.ShowLine=!host.Config.ShowLine;
+    typeof(Plugin).GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    var path=Path.Combine(host.ConfigDirectory,"settings.json");
+    Check(!File.Exists(path),"UI change does not immediately save settings");
+    host.Raise("client:Logout",0,0);
+    Check(File.Exists(path)&&File.ReadAllText(path).Contains("ShowLine"),"logout flush persists pending config");
+    var first=File.GetLastWriteTimeUtc(path);
+    host.Raise("client:Logout",0,0);plugin.Dispose();
+    Check(File.GetLastWriteTimeUtc(path)==first&&host.TotalSubscriptions==0,"duplicate logout and dispose cause no extra write and remove all callbacks");
+    var viewType=typeof(Plugin).Assembly.GetType("KuzushiBeacon.HistoryFilesView")!;
+    var view=Activator.CreateInstance(viewType,host.ConfigDirectory)!;
+    var root=Path.Combine(host.ConfigDirectory,"support-review");Directory.CreateDirectory(root);
+    File.WriteAllBytes(Path.Combine(root,"synthetic.json"),new byte[123]);
+    viewType.GetMethod("Refresh",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,null);
+    ((Task)viewType.GetField("task",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(view)!).GetAwaiter().GetResult();
+    var rows=((string Path,long Count,long Bytes)[])viewType.GetField("rows",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(view)!;
+    Check(rows.Sum(r=>r.Count)==1&&rows.Sum(r=>r.Bytes)==123,"metadata totals exclude settings and include exact logical history bytes");
+    ((IDisposable)view).Dispose();
+}
+{
+    var host=new Host {Pvp=false};host.Config.Support.Features=[86];
+    var plugin=host.Load();var started=DateTimeOffset.UtcNow.AddDays(-1);
+    typeof(Plugin).GetField("reviewStarted",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,(DateTimeOffset?)started);
+    plugin.Dispose();
+    var files=Directory.GetFiles(Path.Combine(host.ConfigDirectory,"support-review"),"*.review.json",SearchOption.AllDirectories);
+    Check(files.Length==1&&files[0].Contains(started.UtcDateTime.ToString("yyyyMMdd")),"dispose completes pending review save in start-day partition");
+    Check(((Task)typeof(Plugin).GetField("reviewWrite",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!).IsCompleted&&host.TotalSubscriptions==0,"review writer joined and subscriptions removed before dispose returns");
+}
 Console.WriteLine($"PASS {checks} host lifecycle checks (real Plugin + thread-enforcing service doubles).");
 
 sealed class Host
@@ -201,7 +231,7 @@ sealed class Host
     public Queue<(Action Action, TaskCompletionSource Completion)> Queue { get; } = [];
     public readonly Dictionary<string, CommandInfo> Commands = [];
     public Configuration Config=new(){Language="ja"};
-    public string ConfigDirectory=Path.GetFullPath("artifacts/host-config");
+    public string ConfigDirectory=Path.GetFullPath("artifacts/host-config-"+Guid.NewGuid().ToString("N"));
     public bool Pvp;
     public bool ThrowOnRead;
     public bool PlayerAvailable = true;
@@ -217,7 +247,8 @@ sealed class Host
     public Plugin Load() => new(Stub<IDalamudPluginInterface>("pi"), Stub<IClientState>("client"),
         Stub<IObjectTable>("objects"), Framework, Stub<IGameGui>("gui"),
         Stub<ICommandManager>("commands"), Stub<IPluginLog>("log"), Stub<ITargetManager>("targets"), Stub<IChatGui>("chat"), Stub<IPlayerState>("playerState"), Stub<IDutyState>("duty"), Stub<IDataManager>("data"), Stub<IGameInteropProvider>("interop"));
-    public int Count(string key) => events.TryGetValue(key, out var list) ? list.Count : 0;
+    // Monitoring counts exclude the cheap 60-second settings scheduler; disposal still counts all callbacks.
+    public int Count(string key) => events.TryGetValue(key, out var list) ? list.Count(d=>d.Method.Name!="PersistenceUpdate") : 0;
     public int TotalSubscriptions => events.Values.Sum(x => x.Count);
     public void Raise(string key, params object?[] args)
     {

@@ -25,7 +25,7 @@ public sealed partial class Plugin
         if(disposed)return;
         config.Ledger.Language=config.Language;
         if(config.Enabled&&S.LedgerEnabled&&ledger==null)
-            ledger=new Ledger.LedgerModule(pi,commands,client,playerState,duty,data,framework,chat,interop,log,config.Ledger,()=>{dirty=true;Save();});
+            ledger=new Ledger.LedgerModule(pi,commands,client,playerState,duty,data,framework,chat,interop,log,config.Ledger,()=>{settingsStore.MarkChanged();});
         else if((!config.Enabled||!S.LedgerEnabled)&&ledger!=null){ledger.Dispose();ledger=null;}
         largeContent=false;
         if(client.IsPvPExcludingDen)
@@ -40,13 +40,13 @@ public sealed partial class Plugin
         }
         S.CurrentLarge=largeContent;
         if(reviewStarted!=null&&(!config.Enabled||!On(86)))FinishReview();
-        if(config.Enabled&&On(86)&&client.IsPvPExcludingDen&&duty.IsDutyStarted&&!reviewCompleted&&reviewStarted==null)reviewStarted=DateTimeOffset.UtcNow;
+        if(config.Enabled&&On(86)&&client.IsPvPExcludingDen&&duty.IsDutyStarted&&!reviewCompleted&&reviewStarted==null&&reviewFailures<3)reviewStarted=DateTimeOffset.UtcNow;
         if(!reviewLoaded&&(On(86)||On(95)))
         {
-            reviewLoaded=true;var path=Path.Combine(pi.GetPluginConfigDirectory(),"support-review","matches.json");
-            // A capped local file is loaded only on first opt-in, never per-frame or per-tab.
-            try {if(File.Exists(path)&&new FileInfo(path).Length<=4*1024*1024)reviewHistory.AddRange((JsonSerializer.Deserialize<ReviewRecord[]>(File.ReadAllText(path))??[]).TakeLast(100));}
-            catch(Exception ex){log.Warning(ex,"Could not load local support review.");}
+            reviewLoaded=true;
+            try { reviewHistory.AddRange(reviewStore.Load<ReviewRecord>());if(reviewStore.ReadError)reviewStatus=HistoryFilesView.Text(config.Language,10); }
+            catch(Exception ex){log.Warning(ex,"Could not load local support review; original data preserved.");}
+
         }
     }
     private async Task SelectSupportTargetAsync(string command,string args)

@@ -43,10 +43,12 @@ public sealed partial class Plugin : IDalamudPlugin
     private LocalizedFonts? fonts;
     private bool open;
     private bool subscribed;
-    private bool dirty;
     private volatile bool disposed;
     private bool faulted;
-    private double saveAfter;
+    private readonly Persistence.SettingsStore settingsStore;
+    private readonly Persistence.ReviewStore reviewStore;
+    private readonly HistoryFilesView historyFiles;
+    private bool persistenceNotice;
     private uint trackedOwner;
     private long drawnLines;
     private long drawnMarkers;
@@ -70,13 +72,22 @@ public sealed partial class Plugin : IDalamudPlugin
         lowHpTarget = new GameLowHpTarget(client, objects, targets);
         world = new DalamudWorld(objects);
         zantetsukenAction = new GameZantetsukenAction(client, objects, targets, world);
-        config = pi.GetPluginConfig() as Configuration ?? new Configuration();
+        var configPath = pi.ConfigFile?.FullName ?? Path.Combine(pi.GetPluginConfigDirectory(), "settings.json");
+        settingsStore = new(configPath, Persistence.SettingsStore.ValidConfiguration, Now);
+        var stored = settingsStore.Load();
+        config = stored != null ? Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(stored)!
+            : File.Exists(configPath) ? new Configuration() : pi.GetPluginConfig() as Configuration ?? new Configuration();
+        if (stored != null || !File.Exists(configPath)) settingsStore.SetBaseline(Newtonsoft.Json.JsonConvert.SerializeObject(config));
+        reviewStore = new(Path.Combine(pi.GetPluginConfigDirectory(), "support-review"));
+        historyFiles = new(pi.GetPluginConfigDirectory());
         config.Sanitize();
         zantetsukenAction.Options = config.Support;
         ClientLanguage? game;
         try { game = client.ClientLanguage; } catch { game = null; }
         Loc.CheckCompleteness();
-        if (config.InitializeLanguage(game, pi.UiLanguage)) pi.SavePluginConfig(config);
+        config.InitializeLanguage(game, pi.UiLanguage);
+        settingsStore.MarkChanged();
+        framework.Update += PersistenceUpdate;
         commandInfo = new CommandInfo((_, _) => Open()) { HelpMessage = T("CommandHelp") };
         commands.AddHandler(Command, commandInfo);
         commands.AddHandler(SettingsAlias, commandInfo);
@@ -225,7 +236,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void TerritoryChanged(uint _) { reviewCompleted=false; FinishReview(); ResetRequest(); Stop(); Reconcile(); }
     private void JobChanged(uint _) { Stop(); Reconcile(); }
-    private void Logout(int _, int __) { FinishReview(); ResetRequest(); Stop(); }
+    private void Logout(int _, int __) { FinishReview(); reviewWrite.GetAwaiter().GetResult(); Save(); ResetRequest(); Stop(); }
 
     private void Fail(Exception ex)
     {
@@ -355,6 +366,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private void Open()
     {
         if (disposed || open) return;
+        historyFiles.Invalidate();
         fonts ??= new LocalizedFonts(pi.UiBuilder.FontAtlas);
         open = true;
         pi.UiBuilder.Draw += DrawSettingsWindow;
@@ -362,8 +374,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void MarkDirty()
     {
-        dirty = true;
-        saveAfter = Now + 0.6;
+        settingsStore.MarkChanged();
         tracker.Clear();
         nextSupport=0;maximumCount=0;countExpiresAt=0;
         if(!On(60))preDeath.Clear();
@@ -373,14 +384,18 @@ public sealed partial class Plugin : IDalamudPlugin
         Reconcile();
     }
 
-    private void Save()
+    private string SettingsSnapshot() => Newtonsoft.Json.JsonConvert.SerializeObject(config);
+    private void PersistenceUpdate(IFramework _)
     {
-        if (!dirty) return;
-        // Do not blindly retry a write whose outcome is unknown.
-        dirty = false;
-        try { pi.SavePluginConfig(config); }
-        catch (Exception ex) { log.Error(ex, "Could not save Kuzushi Beacon settings."); }
+        if (disposed) return;
+        settingsStore.Tick(Now, SettingsSnapshot);
+        if (!persistenceNotice && (settingsStore.Recovered || settingsStore.Error.Length > 0))
+        {
+            persistenceNotice = true;
+            chat.Print(HistoryFilesView.Text(config.Language, settingsStore.Recovered ? 13 : 14));
+        }
     }
+    private void Save() { settingsStore.Flush(SettingsSnapshot); }
 
     private void DrawSettingsWindow()
     {
@@ -394,19 +409,26 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 if(ImGui.BeginTabItem("PvP Supporter###Supporter"))
                 {DrawSettingsNavigation();ImGui.EndTabItem();}
+                historyFiles.Draw(config.Language, reviewStore.Revision + (ledger?.StorageRevision ?? 0));
                 StandardPluginTabs.DrawStandardTrailingTabs(T("Settings"), "Settings", DrawSettings,
                     T("LanguageSettings"), DrawLanguage, T("Support"), DrawSupport);
                 ImGui.EndTabBar();
             }
         }
         ImGui.End();
-        if (dirty && (Now >= saveAfter || !open)) Save();
+
         if (!open) { ledger?.SetVisible(false); pi.UiBuilder.Draw -= DrawSettingsWindow; }
     }
 
     private void DrawSettings()
     {
         ImGui.TextWrapped(T("Explanation"));
+        if(settingsStore.Error.Length>0)
+        {
+            ImGui.TextWrapped(HistoryFilesView.Text(config.Language,14));
+            ImGui.TextWrapped(settingsStore.Error);
+            if(ImGui.Button(HistoryFilesView.Text(config.Language,15))) { settingsStore.Retry(SettingsSnapshot);persistenceNotice=false; }
+        }
         ImGui.TextWrapped(T(faulted ? "Faulted" : subscribed ? "Active" : "Idle"));
         if(ImGui.Checkbox(Label("Enabled"), ref config.Enabled)){faulted=false;MarkDirty();}
         if(ImGui.Button(L("支援機能を全てオン（検証モードを除く）","Enable all support features (except dry run)")))
@@ -441,8 +463,7 @@ public sealed partial class Plugin : IDalamudPlugin
         commandInfo.HelpMessage = T("CommandHelp");
         executeCommandInfo.HelpMessage = T("ExecuteHelp");
         lowHpCommandInfo.HelpMessage = T("LowHpHelp");
-        dirty = true;
-        Save();
+        settingsStore.MarkChanged();
     }
 
     private void DrawSupport() => StandardPluginTabs.DrawSupportContent(
@@ -450,8 +471,10 @@ public sealed partial class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
-        FinishReview();
+        if(disposed)return;
         disposed = true;
+        framework.Update -= PersistenceUpdate;
+        FinishReview();
         ledger?.Dispose(); ledger=null;
         foreach(var name in supportCommands)commands.RemoveHandler(name);
         localSound.Dispose();
@@ -475,6 +498,8 @@ public sealed partial class Plugin : IDalamudPlugin
         commands.RemoveHandler(LowHpCommand);
         commands.RemoveHandler(ExecuteCommand);
         Save();
+        settingsStore.Dispose();
+        historyFiles.Dispose();
         fonts?.Dispose();
     }
 }

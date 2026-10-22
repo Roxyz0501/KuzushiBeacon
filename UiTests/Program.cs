@@ -19,6 +19,7 @@ internal static unsafe class Program
    object? Call(string name,params object[] values)=>type.GetMethod(name,BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,values);
    Call("Open");io.Fonts.Build();
    var glyphs=(string)type.Assembly.GetType("KuzushiBeacon.SupportGlyphs")!.GetField("Text")!.GetRawConstantValue()!;
+   glyphs+=(string)type.Assembly.GetType("KuzushiBeacon.HistoryFilesView")!.GetProperty("FontText")!.GetValue(null)!;
    foreach(var f in UiStub.Fonts)foreach(var ch in glyphs.Distinct())
     if(f.FindGlyphNoFallback(ch)==null)throw new Exception("Missing support glyph U+"+((int)ch).ToString("X4"));
    var textures=new Dictionary<ulong,(nint,int,int)>();
@@ -96,6 +97,17 @@ internal static unsafe class Program
      if(ImGui.GetDrawData().TotalVtxCount==0)throw new Exception("Empty navigation page");
      if(page is 2 or 9)Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"page-"+page+"-"+language+".bmp"));
     }
+   }
+   var historyView=type.GetField("historyFiles",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
+   foreach(var language in new[]{"ja","en","de","fr","ko","zh-Hans","zh-Hant"})
+   {
+    for(int frame=0;frame<2;frame++)
+    {
+     ImGui.NewFrame();ImGui.SetNextWindowPos(new(30,30));ImGui.SetNextWindowSize(new(1200,700));ImGui.Begin("Storage audit");
+     ImGui.PushFont(UiStub.Fonts[0]);ImGui.BeginTabBar("Storage");historyView.GetType().GetMethod("Draw")!.Invoke(historyView,new object[]{language,0});ImGui.EndTabBar();ImGui.PopFont();ImGui.End();ImGui.Render();frames++;
+    }
+    if(ImGui.GetDrawData().TotalVtxCount==0)throw new Exception("Empty history tab "+language);
+    Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"history-"+language+".bmp"));
    }
    UiStub.Pvp=true;UiStub.Config.Language="ja";
    UiStub.Config.Support.Features=FeatureCatalog.All.Where(f=>f.Id!=78&&f.Id!=99).Select(f=>f.Id).ToHashSet();

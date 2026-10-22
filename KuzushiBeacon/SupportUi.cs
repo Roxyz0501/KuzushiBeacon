@@ -251,7 +251,11 @@ public sealed partial class Plugin
                 if(On(60)||On(92)||On(93))DrawDeathRecords(deathRecords);
                 if(On(95)&&ImGui.Button(L("匿名集計をJSON出力","Export anonymous JSON")))QueueReviewWrite(true);
                 if(reviewStatus.Length>0)ImGui.TextWrapped(reviewStatus);
-                foreach(var row in reviewHistory.AsEnumerable().Reverse().Take(20))
+                if(reviewFailures>0&&ImGui.Button(HistoryFilesView.Text(config.Language,15)+"###RetryReview"))RetryReview();
+                if(ImGui.Button("<###ReviewPrevious"))reviewPage=Math.Max(0,reviewPage-1);
+                ImGui.SameLine();ImGui.TextUnformatted($"{reviewPage+1} / {Math.Max(1,(reviewHistory.Count+19)/20)}");ImGui.SameLine();
+                if(ImGui.Button(">###ReviewNext"))reviewPage=Math.Min(Math.Max(0,(reviewHistory.Count-1)/20),reviewPage+1);
+                foreach(var row in reviewHistory.AsEnumerable().Reverse().Skip(reviewPage*20).Take(20))
                 {
                     ImGui.PushID(row.Started.ToString("O"));
                     if(ImGui.TreeNode($"{row.Started.ToLocalTime():MM/dd HH:mm} · {row.Note}###review"))

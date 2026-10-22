@@ -27,12 +27,20 @@ public sealed class HistoryStore(string root)
         return Path.Combine(root, owner);
     }
     private static string Stem(MatchSummary s) => $"{s.Started.UtcDateTime:yyyyMMddTHHmmssfff}-{s.Id:N}";
+    private string RecordStem(string owner, MatchSummary summary)
+    {
+        var dir=OwnerPath(owner);var legacy=Path.Combine(dir,Stem(summary));
+        if(File.Exists(legacy+".summary.json")||File.Exists(legacy+".match.json")||File.Exists(legacy+".delivery"))return legacy;
+        return Path.Combine(dir,summary.Started.UtcDateTime.ToString("yyyyMMdd"),Stem(summary));
+    }
+    private static IEnumerable<string> Summaries(string dir)=>Directory.EnumerateFiles(dir,"*.summary.json",SearchOption.AllDirectories)
+        .OrderByDescending(Path.GetFileName,StringComparer.Ordinal);
     private void Atomic(string path, byte[] bytes)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + ".tmp";
         using (var file = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None)) { file.Write(bytes); file.Flush(true); }
-        File.Move(temp, path, true); Writes++; WrittenBytes += bytes.Length;
+        File.Move(temp, path, true); Writes++; WrittenBytes += bytes.Length; Revision++;
     }
     private T Read<T>(string path, int limit)
     {
@@ -45,7 +53,7 @@ public sealed class HistoryStore(string root)
     {
         lock (gate)
         {
-            var dir = OwnerPath(owner); var stem = Path.Combine(dir, Stem(record.Summary));
+            var dir = OwnerPath(owner); var stem = RecordStem(owner, record.Summary);
             if (File.Exists(stem + ".summary.json")) return; // idempotent same snapshot retry.
             var bytes = JsonSerializer.SerializeToUtf8Bytes(record);
             if (bytes.Length > MaxRecordBytes) throw new InvalidDataException("Match exceeds history limit");
@@ -57,7 +65,7 @@ public sealed class HistoryStore(string root)
     }
     private void Prune(string dir)
     {
-        var files = Directory.EnumerateFiles(dir, "*.summary.json").OrderDescending(StringComparer.Ordinal).ToArray();
+        var files = Summaries(dir).ToArray();
         long bytes = 0; var cutoff = DateTimeOffset.UtcNow.AddDays(-365).ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
         for (int i = 0; i < files.Length; i++)
         {
@@ -75,7 +83,7 @@ public sealed class HistoryStore(string root)
             var dir = OwnerPath(owner);
             if (inventoryOwner != owner || DateTimeOffset.UtcNow - cachedAt > TimeSpan.FromMinutes(5))
             {
-                inventory = Directory.Exists(dir) ? Directory.EnumerateFiles(dir, "*.summary.json").OrderDescending(StringComparer.Ordinal).Take(MaxMatches).ToArray() : [];
+                inventory = Directory.Exists(dir) ? Summaries(dir).Take(MaxMatches).ToArray() : [];
                 inventoryOwner = owner; cachedAt = DateTimeOffset.UtcNow; pages.Clear(); pageOrder.Clear();
             }
             page = Math.Max(0, page); var key = (owner, page);
@@ -99,7 +107,7 @@ public sealed class HistoryStore(string root)
     {
         lock (gate)
         {
-            var record = Read<MatchRecord>(Path.Combine(OwnerPath(owner), Stem(summary) + ".match.json"), MaxRecordBytes);
+            var record = Read<MatchRecord>(RecordStem(owner,summary) + ".match.json", MaxRecordBytes);
             if (record.Schema != 1 || record.Summary.Id != summary.Id || record.Events.Length > MatchSession.MaxEvents) throw new InvalidDataException("Unsupported history");
             return record;
         }
@@ -112,7 +120,8 @@ public sealed class HistoryStore(string root)
             // No silent overwrite and no automatic deletion of explicit exports.
             var path = Path.Combine(dir, $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.csv");
             var csv = detail == null ? CsvExport.SummaryHeader + string.Concat(summaries.Take(PageSize).Select(CsvExport.SummaryRow)) : CsvExport.Events(detail);
-            using var writer = new StreamWriter(new FileStream(path, FileMode.CreateNew, FileAccess.Write), new UTF8Encoding(true)); writer.Write(csv);
+            using (var writer = new StreamWriter(new FileStream(path, FileMode.CreateNew, FileAccess.Write), new UTF8Encoding(true))) writer.Write(csv);
+            Writes++;WrittenBytes+=new FileInfo(path).Length;Revision++;
             return path;
         }
     }
@@ -121,15 +130,16 @@ public sealed class HistoryStore(string root)
     {
         lock (gate)
         {
-            var path = Path.Combine(OwnerPath(owner), Stem(summary) + ".delivery");
+            var path = RecordStem(owner,summary) + ".delivery";
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             try
             {
                 using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                file.Write("Attempted"u8); file.Flush(true); Writes++; WrittenBytes += 9; return true;
+                file.Write("Attempted"u8); file.Flush(true); Writes++; WrittenBytes += 9; Revision++; return true;
             }
             catch (IOException) when (File.Exists(path)) { return false; }
         }
     }
     public void DeliveryResult(string owner, MatchSummary summary, string result)
-    { lock (gate) Atomic(Path.Combine(OwnerPath(owner), Stem(summary) + ".delivery"), Encoding.UTF8.GetBytes(result)); }
+    { lock (gate) Atomic(RecordStem(owner,summary) + ".delivery", Encoding.UTF8.GetBytes(result)); }
 }

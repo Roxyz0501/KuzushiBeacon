@@ -92,6 +92,23 @@ internal static class Program
         var old = record with { Summary = record.Summary with { Id = Guid.NewGuid(), Started = now.AddDays(-366) } }; store.Save(owner, old);
         Check(store.Page(owner, 0).Count == 60, "Expiry pruning on save");
 
+        var dailyRoot=Path.Combine(root,"daily");var daily=new HistoryStore(dailyRoot);
+        var midnight=new DateTimeOffset(now.Year,now.Month,now.Day,0,0,0,TimeSpan.Zero);
+        var beforeMidnight=record with {Summary=record.Summary with {Id=Guid.NewGuid(),Started=midnight.AddSeconds(-1),Ended=midnight.AddMinutes(5)}};
+        var afterMidnight=record with {Summary=record.Summary with {Id=Guid.NewGuid(),Started=midnight.AddSeconds(1)}};
+        daily.Save(owner,afterMidnight);daily.Save(owner,beforeMidnight);
+        Check(Directory.GetDirectories(Path.Combine(dailyRoot,owner)).Length==2,"matches crossing midnight partition by UTC start without splitting match");
+        var dailyWrites=daily.Writes;daily.Save(owner,beforeMidnight);
+        Check(daily.Writes==dailyWrites&&new HistoryStore(dailyRoot).Page(owner,0).Count==2,"restart all-date read and idempotent delayed save");
+        var legacySummary=Directory.GetFiles(dailyRoot,"*.summary.json",SearchOption.AllDirectories).First();
+        var legacyBody=legacySummary[..^13]+".match.json";
+        File.Move(legacySummary,Path.Combine(dailyRoot,owner,Path.GetFileName(legacySummary)));
+        File.Move(legacyBody,Path.Combine(dailyRoot,owner,Path.GetFileName(legacyBody)));
+        var mixed=new HistoryStore(dailyRoot);var mixedPage=mixed.Page(owner,0);
+        Check(mixedPage.Count==2&&mixedPage.Rows.All(r=>mixed.Detail(owner,r).Summary.Id==r.Id),"flat legacy and date directories coexist without migration writes");
+        Check(mixed.Writes==0,"legacy reading performs zero migration writes");
+        foreach(var row in mixedPage.Rows){Check(mixed.ClaimDelivery(owner,row),"new/legacy durable claim");Check(!new HistoryStore(dailyRoot).ClaimDelivery(owner,row),"new/legacy duplicate claim across restart");}
+
         var codes = new[] {"ja","en","de","fr","ko","zh-Hans","zh-Hant"};
         var locales = JsonSerializer.Deserialize<Dictionary<string,string[]>>(File.ReadAllText(Path.Combine(args[1], "KuzushiBeacon/Ledger/Locales.json")))!;
         foreach (var (key, values) in locales)

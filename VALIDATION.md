@@ -1,3 +1,7 @@
+# 1.1.0.6 persistence validation — 2026-10-22
+
+See PERSISTENCE_AUDIT_2026-10-22.md for measured logical write counts, migration, shutdown and fault-injection results. No production migration or installed DLL replacement.
+
 # 1.1.0.5 explicit press semantics — 2026-10-21
 
 - 343 managed checks: 21 consecutive explicit selection/execution calls (initial simulated rejection followed by success) result in 21 attempts, with no automatic attempt; expired Kuzushi prevents the next attempt.

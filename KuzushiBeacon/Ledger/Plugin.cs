@@ -38,7 +38,18 @@ internal sealed partial class LedgerModule : IDisposable
     private string owner = "", status = "", exportPath = "", webhookDraft = "";
     private bool open, preview, disposed, ticking;
     private volatile bool allowDiscord;
-    private DateTimeOffset nextTick, endDue, saveConfigDue;
+    private DateTimeOffset nextTick, endDue;
+    private readonly List<Task> auxiliary=[];
+    private int pendingJobs;
+    private int saveFailures, readFailures;
+    private DateTimeOffset nextReadAttempt;
+    public int StorageRevision => store.Revision;
+    private void RunTracked(System.Action action)
+    {
+        if(disposed)return;
+        auxiliary.RemoveAll(t=>t.IsCompleted);
+        auxiliary.Add(Task.Run(action));
+    }
     private uint finishedTerritory;
     private int lastGauge = -1, lastKills = -1;
     private int historyRevision = -1, page, count, historyGeneration;
@@ -76,8 +87,7 @@ internal sealed partial class LedgerModule : IDisposable
     private void OnLeft() { DrainResults(); Finish(current?.Ended==null); lastMatch=null; }
     private void QueueCompletion(System.Action action)
     {
-        completions.Enqueue(action);
-        _=framework.RunOnFrameworkThread(StartTicks);
+        if(!disposed)completions.Enqueue(action);
     }
     private void OnLogin()
     {
@@ -94,7 +104,7 @@ internal sealed partial class LedgerModule : IDisposable
     private void OnLogout(int _, int __)
     {
         DrainResults();
-        Finish(true); owner = ""; history = []; detail = null; lastMatch = null; historyGeneration++;
+        Finish(true); FlushJobs(); owner = ""; history = []; detail = null; lastMatch = null; historyGeneration++;
         loading = detailLoading = false; historyRevision = -1; count = page = 0; finishedTerritory = 0;
     }
     private void OnTerritory(uint territory)
@@ -112,7 +122,7 @@ internal sealed partial class LedgerModule : IDisposable
     }
     private void Start(bool partial)
     {
-        if (current != null || !client.IsPvPExcludingDen || !player.IsLoaded || player.ContentId == 0) return;
+        if (disposed || saveFailures>=3 || current != null || !client.IsPvPExcludingDen || !player.IsLoaded || player.ContentId == 0) return;
         try
         {
             var cfc = duty.ContentFinderCondition.Value;
@@ -143,7 +153,9 @@ internal sealed partial class LedgerModule : IDisposable
         var job = new SaveJob(current.Owner, record, config.DiscordEnabled && record.Summary.Official,
             config.ProtectedWebhook, config.Language!, config.DiscordIncludeName);
         finishedTerritory = current.Territory; current = null; lastMatch = record;
-        if (!jobs.Writer.TryWrite(job)) { failed.Add(job); status = "SaveFailed"; }
+        StartTicks();
+        Interlocked.Increment(ref pendingJobs);
+        if (!jobs.Writer.TryWrite(job)) jobs.Writer.WriteAsync(job).AsTask().GetAwaiter().GetResult();
     }
     private async Task Worker()
     {
@@ -151,32 +163,39 @@ internal sealed partial class LedgerModule : IDisposable
         {
             try
             {
+                if(saveFailures>=3) {lock(failed)failed.Add(job);continue;}
                 store.Save(job.Owner, job.Record);
                 QueueCompletion(() => { status = "Saved"; if (open && owner == job.Owner) LoadHistory(); });
-                if (!job.Send || !allowDiscord || cancellation.IsCancellationRequested) continue;
+                if (!job.Send || !allowDiscord || cancellation.IsCancellationRequested) {saveFailures=0;continue;}
                 string url;
                 try { url = SecretStore.Unprotect(job.Secret); }
                 catch { QueueCompletion(() => status = "SecretFailed"); continue; }
                 if (!store.ClaimDelivery(job.Owner, job.Record.Summary)) continue;
                 var result = await webhook.Send(url, job.Record.Summary, job.Language, job.Name, cancellation.Token).ConfigureAwait(false);
-                store.DeliveryResult(job.Owner, job.Record.Summary, result);
+                store.DeliveryResult(job.Owner, job.Record.Summary, result);saveFailures=0;
                 QueueCompletion(() => status = result);
             }
             catch
             {
-                QueueCompletion(() => { failed.Add(job with { Send = false }); status = "SaveFailed"; });
-                log.Warning("PvP Ledger background save failed; snapshot retained for manual save retry.");
+                lock(failed)failed.Add(job with { Send = false });
+                QueueCompletion(() => status = "SaveFailed");
+                if(++saveFailures==1||saveFailures==3)log.Warning("PvP Ledger save failed; retained for manual retry. Automatic saves stop after three failures.");
             }
+            finally { Interlocked.Decrement(ref pendingJobs); }
         }
+    }
+    private void FlushJobs()
+    {
+        // Worker never waits on framework callbacks; shutdown can safely join it.
+        SpinWait.SpinUntil(()=>Volatile.Read(ref pendingJobs)==0);
     }
     private void Update(IFramework _)
     {
         DrainResults();
         while (completions.TryDequeue(out var complete)) if (!disposed) complete();
-        if(!client.IsPvPExcludingDen&&!open&&current==null&&lastMatch==null&&saveConfigDue==default&&completions.IsEmpty)
+        if(!client.IsPvPExcludingDen&&!open&&current==null&&lastMatch==null&&Volatile.Read(ref pendingJobs)==0&&auxiliary.All(t=>t.IsCompleted)&&completions.IsEmpty)
         {framework.Update-=Update;ticking=false;return;}
         var now = DateTimeOffset.UtcNow;
-        if (saveConfigDue != default && now >= saveConfigDue) SaveConfig();
         if (now < nextTick) return; nextTick = now.AddMilliseconds(250);
         if (current is { Ended: not null } && now >= endDue) { Finish(false); return; }
         if (current == null)
@@ -204,17 +223,17 @@ internal sealed partial class LedgerModule : IDisposable
         if (victim is { IsPlayer: true } && IsLocal(killer)) current.Add(DateTimeOffset.UtcNow, EventKind.Kill, victim.Name.ExtractText());
         else if (IsLocal(victim)) current.Add(DateTimeOffset.UtcNow, EventKind.Death, killer?.Name.ExtractText() ?? "");
     }
-    private void ChangeConfig() { config.Sanitize(); StartTicks(); saveConfigDue = DateTimeOffset.UtcNow.AddMilliseconds(500); }
+    private void ChangeConfig() { config.Sanitize(); SaveConfig(); }
     private void SaveConfig()
     {
-        try { save(); saveConfigDue = default; }
-        catch { status = "ConfigFailed"; saveConfigDue = default; }
+        try { save(); }
+        catch { status = "ConfigFailed"; }
     }
     private void LoadHistory()
     {
-        if (owner.Length == 0 || loading) return;
+        if (disposed || owner.Length == 0 || loading || readFailures>=3 || DateTimeOffset.UtcNow<nextReadAttempt) return;
         loading = true; var generation = historyGeneration; var requestedOwner = owner; var requestedPage = page;
-        _ = Task.Run(() =>
+        RunTracked(() =>
         {
             try
             {
@@ -222,19 +241,19 @@ internal sealed partial class LedgerModule : IDisposable
                 QueueCompletion(() =>
                 {
                     if (generation != historyGeneration || requestedOwner != owner) return;
-                    loading = false; history = result.Rows; count = result.Count; historyRevision = result.Revision;
+                    loading = false; readFailures=0;nextReadAttempt=default; history = result.Rows; count = result.Count; historyRevision = result.Revision;
                     RefreshFonts(history.Select(s => s.Arena));
                     if (historyRevision != store.Revision) LoadHistory();
                 });
             }
-            catch { QueueCompletion(() => { if (generation == historyGeneration) { loading = false; status = "ReadFailed"; } }); }
+            catch { QueueCompletion(() => { if (generation == historyGeneration) { loading = false;readFailures++;nextReadAttempt=DateTimeOffset.UtcNow.AddSeconds(30); status = "ReadFailed"; } }); }
         });
     }
     private void LoadDetail(MatchSummary summary)
     {
         if (detailLoading || owner.Length == 0) return;
         detailLoading = true; var generation = historyGeneration; var requestedOwner = owner;
-        _ = Task.Run(() =>
+        RunTracked(() =>
         {
             try { var result = store.Detail(requestedOwner, summary); QueueCompletion(() => { if (generation == historyGeneration) { detail = result; eventPage = 0; detailLoading = false; } }); }
             catch { QueueCompletion(() => { if (generation == historyGeneration) { status = "ReadFailed"; detailLoading = false; } }); }
@@ -244,7 +263,7 @@ internal sealed partial class LedgerModule : IDisposable
     {
         if (exporting || owner.Length == 0 || (events && detail == null)) return;
         exporting = true; var requestedOwner = owner; var rows = history; var selected = events ? detail : null;
-        _ = Task.Run(() =>
+        RunTracked(() =>
         {
             try { var path = store.Export(requestedOwner, rows, selected); QueueCompletion(() => { exporting = false; exportPath = path; status = "Exported"; }); }
             catch { QueueCompletion(() => { exporting = false; status = "ExportFailed"; }); }
@@ -257,6 +276,8 @@ internal sealed partial class LedgerModule : IDisposable
     }
     public void Dispose()
     {
+        if(disposed)return;
+        disposed=true;
         pi.UiBuilder.Draw -= Draw;
         framework.Update -= Update; ticking=false; client.EnterPvP-=StartTicks; client.LeavePvP-=OnLeft; chat.LogMessage -= OnLog; duty.DutyStarted -= OnStart;
         duty.DutyRecommenced -= OnRecommence; duty.DutyCompleted -= OnEnd;
@@ -265,10 +286,15 @@ internal sealed partial class LedgerModule : IDisposable
         DrainResults();
         while (completions.TryDequeue(out var complete)) complete();
         Finish(true);
-        if (saveConfigDue != default) SaveConfig();
+
         disposed = true;  cancellation.Cancel(); jobs.Writer.TryComplete();
         // Disk-only queue drains on unload. Cancelling HTTP prevents the ten-second network timeout.
         worker.GetAwaiter().GetResult();
+        Task.WhenAll(auxiliary).GetAwaiter().GetResult();auxiliary.Clear();
+        while(completions.TryDequeue(out _)){}
+        lock(failed)
+            foreach(var job in failed)
+                try{store.Save(job.Owner,job.Record);}catch{log.Warning("Unsaved match remains unavailable on disk; check storage permissions and capacity.");break;}
         webhook.Dispose(); cancellation.Dispose(); fonts.Dispose();
     }
 }

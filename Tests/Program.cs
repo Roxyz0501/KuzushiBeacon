@@ -308,6 +308,7 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     Check(!Zantetsuken.Execute(true, 1, Vector3.Zero, 0, pressWorld, action) && action.Attempts == 21,
         "each press refreshes candidates; expired Kuzushi does not execute");
 }
+checks += PersistenceChecks.Run();
 Console.WriteLine($"PASS {checks} checks; localization complete for {Loc.Languages.Length} languages.");
 
 sealed class FakeWorld : IHighlightWorld

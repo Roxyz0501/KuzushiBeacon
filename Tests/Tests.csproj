@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../KuzushiBeacon/Persistence/*.cs" Link="Persistence/%(Filename)%(Extension)" />
     <Compile Include="../KuzushiBeacon/FeatureHelp.cs" Link="FeatureHelp.cs" />
     <Compile Include="../KuzushiBeacon/SupportMath.cs" Link="SupportMath.cs" />
     <Compile Include="../KuzushiBeacon/SupportOptions.cs" Link="SupportOptions.cs" />

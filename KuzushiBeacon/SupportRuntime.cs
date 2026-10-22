@@ -41,6 +41,11 @@ public sealed partial class Plugin
     private string requestState=>requestPhase switch {1=>L("要求済み","Requested"),2=>L("LB消費確認","LB consumption observed"),_=>L("待機","Idle")};
     private DateTimeOffset? reviewStarted;
     private Task reviewWrite=Task.CompletedTask;
+    private int reviewPage;
+    private readonly List<ReviewRecord> unsavedReviews=[];
+    private readonly object reviewSync=new();
+    private int reviewFailures;
+    private bool reviewExportPending;
     private readonly List<DeathRecord> deathRecords=[];
     private string reviewStatus="";
     private long supportScans, supportReads, supportDraws;
@@ -51,7 +56,7 @@ public sealed partial class Plugin
     private bool NotificationsAllowed=>S.Notifications&&!S.DisabledGroups.Contains(5);
     private string L(string ja,string en)=>config.Language=="ja"?ja:en;
     private sealed record ReviewRecord(DateTimeOffset Started,DateTimeOffset Ended,string Note,Dictionary<string,float>? Settings,double? FullSeconds,int? Opportunities,
-        int? Peak,Dictionary<string,long>? Commands,Dictionary<string,long>? Failures,DeathRecord[] Deaths);
+        int? Peak,Dictionary<string,long>? Commands,Dictionary<string,long>? Failures,DeathRecord[] Deaths,Guid Id=default);
     private sealed record DeathState(uint Hp,uint Mp,uint[] Controls);
     private sealed record DeathRecord(DateTimeOffset At,int? Enemies,int? Allies,double? Survival,DeathState[] States);
 
@@ -65,7 +70,7 @@ public sealed partial class Plugin
         var watch=Stopwatch.StartNew();
         var player=objects.LocalPlayer;
         if(player is null || !player.IsValid()){ClearSupport();return;}
-        if(reviewStarted==null&&On(86)&&duty.IsDutyStarted&&!reviewCompleted)reviewStarted=DateTimeOffset.UtcNow;
+        if(reviewStarted==null&&reviewFailures<3&&On(86)&&duty.IsDutyStarted&&!reviewCompleted)reviewStarted=DateTimeOffset.UtcNow;
         var elapsed=lastSupportTime==0?0:Math.Clamp(now-lastSupportTime,0,1);
         lastSupportTime=now;
         var legacy=player.ClassJob.RowId==Rules.SamuraiJob&&(OwnHighlightsEnabled||CountHighlightEnabled);
@@ -238,7 +243,7 @@ public sealed partial class Plugin
     }
     private bool reviewCompleted;
     private void SupportDutyStarted(Dalamud.Game.DutyState.IDutyStateEventArgs _)
-    { FinishReview(); reviewCompleted=false; Reconcile(); if(config.Enabled&&client.IsPvPExcludingDen&&On(86))reviewStarted=DateTimeOffset.UtcNow; }
+    { FinishReview(); reviewCompleted=false; Reconcile(); if(config.Enabled&&client.IsPvPExcludingDen&&On(86)&&reviewFailures<3)reviewStarted=DateTimeOffset.UtcNow; }
     private void SupportDutyEnded(Dalamud.Game.DutyState.IDutyStateEventArgs _)
     { FinishReview(); reviewCompleted=true; }
     private void FinishReview()
@@ -246,31 +251,43 @@ public sealed partial class Plugin
         if(config.Enabled&&On(86)&&reviewStarted is {} started)
         {
             var record=new ReviewRecord(started,DateTimeOffset.UtcNow,On(94)?S.MatchNote:"",On(94)?new Dictionary<string,float>{{"MeleeRange",S.MeleeRange},{"RangedRange",S.RangedRange},{"AreaRadius",S.AreaRadius},{"LowHpPercent",S.LowHpPercent},{"AlertCount",S.AlertCount}}:null,On(87)?fullSeconds:null,
-                On(88)?opportunities:null,On(89)?peakCoverage:null,On(90)?new(commandCounts):null,On(91)?new(failureCounts):null,deathRecords.ToArray());
+                On(88)?opportunities:null,On(89)?peakCoverage:null,On(90)?new(commandCounts):null,On(91)?new(failureCounts):null,deathRecords.ToArray(),Guid.NewGuid());
             reviewHistory.Add(record);if(reviewHistory.Count>100)reviewHistory.RemoveAt(0);
+            lock(reviewSync) unsavedReviews.Add(record);
             QueueReviewWrite(false);
         }
         reviewStarted=null;fullSeconds=0;opportunities=peakCoverage=0;commandCounts.Clear();failureCounts.Clear();deathRecords.Clear();preDeath.Clear();
     }
     private void QueueReviewWrite(bool export)
     {
-        var snapshot=(export?reviewHistory.TakeLast(20):reviewHistory).ToArray();var dir=Path.Combine(pi.GetPluginConfigDirectory(),"support-review");
-        var file=export?$"anonymous-{DateTime.UtcNow:yyyyMMdd-HHmmssfff}.json":"matches.json";
+        if(export && (disposed||reviewExportPending))return;
+        // At most one disk job. Match boundaries apply backpressure instead of dropping records.
+        if(!export)reviewWrite.GetAwaiter().GetResult();
+        var exported=export?reviewHistory.TakeLast(20).ToArray():[];
+        if(export)reviewExportPending=true;
         reviewWrite=reviewWrite.ContinueWith(_=>
         {
             try
             {
-                Directory.CreateDirectory(dir);var path=Path.Combine(dir,file);var temp=path+".tmp";
-                var rows=snapshot;var json=JsonSerializer.Serialize(rows,new JsonSerializerOptions{WriteIndented=true});
-                while(System.Text.Encoding.UTF8.GetByteCount(json)>4*1024*1024&&rows.Length>1)
-                {rows=rows[1..];json=JsonSerializer.Serialize(rows,new JsonSerializerOptions{WriteIndented=true});}
-                File.WriteAllText(temp,json);File.Move(temp,path,true);
-                if(export)foreach(var old in Directory.EnumerateFiles(dir,"anonymous-*.json").OrderByDescending(File.GetLastWriteTimeUtc).Skip(20))File.Delete(old);
+                ReviewRecord[] pending;
+                lock(reviewSync)pending=unsavedReviews.ToArray();
+                if(reviewFailures<3)
+                    foreach(var row in pending)
+                    { reviewStore.Save(row,row.Started);lock(reviewSync)unsavedReviews.Remove(row);reviewFailures=0; }
+                if(export)reviewStore.Export(exported);
             }
-            catch(Exception ex){log.Error(ex,"Could not save anonymous review; no automatic retry.");}
+            catch(Exception ex)
+            {
+                reviewFailures++;
+                if(reviewFailures==1||reviewFailures==3)log.Error(ex,"Review save failed; retained for manual retry. Automatic writes stop after three failures.");
+                reviewStatus=HistoryFilesView.Text(config.Language,14);
+            }
+            finally {if(export)reviewExportPending=false;}
         },TaskScheduler.Default);
-        reviewStatus=export?L("匿名集計の保存を予約しました","Anonymous export queued"):"";
+        if(export)reviewStatus=L("匿名集計の保存を予約しました","Anonymous export queued");
     }
+    private void RetryReview()
+    {reviewWrite.GetAwaiter().GetResult();reviewFailures=0;QueueReviewWrite(false);}
     private void CountCommand(string name,bool success,string reason)
     {
         if(On(90))commandCounts[name]=commandCounts.GetValueOrDefault(name)+1;

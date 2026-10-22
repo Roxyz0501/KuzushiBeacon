@@ -28,6 +28,7 @@ internal sealed partial class LedgerModule
     private void DrawHistory()
     {
         if (owner.Length == 0) { ImGui.TextWrapped(T("LoginNeeded")); return; }
+        if(readFailures>0&&ImGui.Button(T("RetrySave")+"###RetryHistoryRead")){readFailures=0;nextReadAttempt=default;LoadHistory();}
         ImGui.BeginDisabled(loading || detailLoading);
         if (ImGui.Button(T("Previous") + "###Previous") && page > 0) { page--; LoadHistory(); }
         ImGui.SameLine(); ImGui.TextUnformatted($"{page + 1} / {Math.Max(1, (count + 24) / 25)}"); ImGui.SameLine();
@@ -118,7 +119,9 @@ internal sealed partial class LedgerModule
             ImGui.Separator(); ImGui.TextWrapped(T(native.Status));
             if (failed.Count > 0 && ImGui.Button(T("RetrySave") + "###RetrySave"))
             {
-                for (int i = failed.Count - 1; i >= 0; i--) if (jobs.Writer.TryWrite(failed[i])) failed.RemoveAt(i);
+                saveFailures=0;StartTicks();
+                lock(failed)for (int i = failed.Count - 1; i >= 0; i--)
+                { Interlocked.Increment(ref pendingJobs);if (jobs.Writer.TryWrite(failed[i]))failed.RemoveAt(i);else Interlocked.Decrement(ref pendingJobs); }
             }
         }
         ImGui.EndChild();
