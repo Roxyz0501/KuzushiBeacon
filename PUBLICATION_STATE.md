@@ -1,3 +1,14 @@
+## 2026-10-23 — PvP Supporter 1.1.0.7
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.7
+- Source/tag: 53ca3b22d478c9e90d5d7916f1a470d594606da7.
+- ZIP: 201,773 bytes; SHA256 B27BB5EB1BA52125D805C795D1E425802775AC91C5D42DCE3D82EE7DC12D0F9E. Anonymous public download equals local package and current Release DLL; eight allowed entries and version/identity verified. Repository HTTP 200; icon image/png.
+- Shared index commit: 8af34d5b9608dd3a246a46998d58bb675c085ded. Connector commit-pinned content and ordinary anonymous main URL verified at 1.1.0.7; all twelve other entries unchanged.
+- Purify-before-LB option: explicit command only, native availability checks and UseAction(None), bounded two-second removal/animation wait, fresh candidate validation and one LB continuation. Repeated presses share the wait without resetting its deadline. No Purify retry loop/custom packets. Current official removability includes Miracle of Nature; bind blocks Zantetsuken.
+- Existing observed enemy target count gains independently configurable overhead/HUD display, color, text size and height. No extra actor scan.
+- 487 managed checks, 68 host lifecycle checks, 487 headless UI frames and zero-warning/error Release build. Seven new-string locales/font coverage verified. No installed DLL replacement; native in-match actions remain unverified.
+- Enemy LB-ready highlight remains unimplemented: no validated enemy-ID/gauge data source found. No guessed status or inert toggle published. Scope and remaining investigation disclosed in README/release notes.
+
 ## 2026-10-22 — PvP Supporter 1.1.0.6 persistence audit
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.6
