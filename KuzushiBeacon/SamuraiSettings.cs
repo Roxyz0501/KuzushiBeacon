@@ -140,6 +140,8 @@ public sealed partial class Plugin
                 }
                 ImGui.Unindent();
             }
+            changed|=ImGui.Checkbox(T("PurifyFirst"),ref S.PurifyBeforeZantetsuken);
+            HoverHelp(T("PurifyFirstHelp"));
             changed|=DrawFeatureToggle(FeatureCatalog.ById[43]);
             changed|=DrawFeatureToggle(FeatureCatalog.ById[44]);
             changed|=DrawFeatureToggle(FeatureCatalog.ById[45]);

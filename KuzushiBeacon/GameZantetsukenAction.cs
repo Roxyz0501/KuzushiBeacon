@@ -11,6 +11,21 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
     ITargetManager targets, IHighlightWorld world) : IZantetsukenAction
 {
     public RequestGate Gate { get; } = new();
+    public PurifyFollowup Purify { get; } = new();
+    private const uint PurifyAction = 29056;
+    private static bool Blocked(IBattleChara player) => player.StatusList.Any(s => s.RemainingTime > 0 && PurifyFollowup.BlockingStatus(s.StatusId));
+    public bool TakePurifyFollowup(double now, bool allowed, bool fullGauge)
+    {
+        if (!Purify.Pending) return false;
+        var player = objects.LocalPlayer;
+        var valid = allowed && fullGauge && Options?.PurifyBeforeZantetsuken == true && Options?.On(99) != true
+            && player != null && player.IsValid() && !player.IsDead && player.EntityId == Purify.Owner
+            && player.ClassJob.RowId == Rules.SamuraiJob && targets.Target?.GameObjectId == Purify.Target;
+        if (!valid) return Purify.Take(now, false, true, false);
+        var manager = ActionManager.Instance();
+        return Purify.Take(now, true, Blocked(player!), manager != null && !manager->ActionQueued
+            && manager->AnimationLock <= 0 && manager->CastTimeTotal <= 0);
+    }
     public SupportOptions? Options { get; set; }
     public bool TargetOnly { get; set; }
     public Actor? LastSelection { get; private set; }
@@ -73,10 +88,34 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
         if (actor is null) return false;
         LastSelection = candidate;
         if (Options?.On(99) == true) return true;
-        if (TargetOnly) { targets.Target = actor; return true; }
+        if (TargetOnly) { Purify.Cancel(); targets.Target = actor; return true; }
         // Diagnostic state only: a previous request must never suppress a new explicit press.
         var manager = ActionManager.Instance();
         if (manager == null) return false;
+        var now = System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+        // Repeated explicit presses join the existing continuation even after removal,
+        // while the Purify animation is still locked. They cannot cancel or postpone LB.
+        if (Purify.Pending)
+        {
+            var ready = TakePurifyFollowup(now, true, IsLimitBreakFull());
+            if (!ready && Purify.Pending) return true;
+        }
+        if (Options?.PurifyBeforeZantetsuken == true && Blocked(player))
+        {
+            if (manager->GetActionStatus(ActionType.Action, PurifyAction, player.GameObjectId) == 0)
+            {
+                targets.Target = actor;
+                var purified = manager->UseAction(ActionType.Action, PurifyAction, player.GameObjectId,
+                    mode: ActionManager.UseActionMode.None);
+                if (purified || manager->ActionQueued && manager->QueuedActionType == ActionType.Action && manager->QueuedActionId == PurifyAction)
+                {
+                    Purify.Begin(now, owner, actor.GameObjectId);
+                    return true;
+                }
+            }
+            // No accepted Purify: normal LB entry still decides whether it can run.
+        }
+        Purify.Cancel();
         Gate.Reset();
         Gate.Begin(System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency);
         targets.Target = actor;

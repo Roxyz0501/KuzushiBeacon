@@ -11,6 +11,26 @@ void Check(bool result, string name)
     checks++;
 }
 
+var followup = new PurifyFollowup();
+Check(!followup.Take(1,true,false,true), "no implicit action without command");
+followup.Begin(1,10,20);
+Check(!followup.Take(1.1,true,true,true) && followup.Pending, "wait for status removal");
+Check(!followup.Take(1.2,true,false,false) && followup.Pending, "wait for animation lock");
+Check(followup.Take(1.3,true,false,true) && !followup.Pending, "one continuation after ready");
+Check(!followup.Take(1.4,true,false,true), "no repeated continuation");
+followup.Begin(2,10,20);
+Check(!followup.Take(4,true,false,true) && !followup.Pending, "timeout cannot execute late");
+followup.Begin(5,10,20);
+Check(!followup.Take(5.1,false,false,true) && !followup.Pending, "invalid context cancels");
+followup.Begin(10,10,20);
+for(int i=1;i<100;i++) Check(!followup.Take(10+i*.01,true,i<50,false) && followup.Pending, "burst during Purify cannot reset or cancel continuation");
+Check(followup.Take(11.1,true,false,true), "LB continues once after repeated presses during removal and animation lock");
+followup.Begin(20,10,20);
+for(int i=1;i<20;i++) followup.Take(20+i*.1,true,true,false);
+Check(!followup.Take(22,true,false,true) && !followup.Pending, "burst never extends timeout");
+foreach(var id in new uint[]{1343,1345,1347,3085,3134,3219}) Check(PurifyFollowup.BlockingStatus(id), "purifiable blocking status");
+foreach(var id in new uint[]{1344,3167,3022,1348,3174,0}) Check(!PurifyFollowup.BlockingStatus(id), "do not waste Purify on nonblocking or uncleansable effect");
+
 Check(Rules.CanRun(true, true, true, true, true, 34), "samurai in PvP");
 foreach (var state in new[] {
     (false,true,true,true,true,34u), (true,false,false,true,true,34u),

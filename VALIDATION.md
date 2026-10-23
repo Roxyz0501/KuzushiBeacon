@@ -1,3 +1,14 @@
+# 1.1.0.7 command continuation and focus display — 2026-10-23
+
+- 487 managed checks, 68 host lifecycle checks, 487 headless UI frames; clean Release build (zero warnings/errors).
+- Purify continuation: no action without an explicit command, wait for removal/animation lock, exactly one continuation, expiry and invalid context cancellation. A 99-press simulated burst while blocked and during animation lock does not reset or cancel the continuation; repeated blocked presses do not extend its two-second deadline.
+- Production wiring: only accepted or natively queued Purify starts continuation. Each framework update observes existing state; no Purify retry loop. Continuation re-runs fresh Zantetsuken selection/minimum/exclusion checks. Target-only/dry-run never execute Purify; pending work clears on logout, territory change, disposal, disable, owner/job/target changes or spent/unknown LB.
+- Existing enemy-target counter uses the bounded shared PvP actor snapshot. New overhead drawing and per-feature controls do not introduce a second scan or disk writes. Disabled feature suppresses both new display and children; non-PvP remains suspended. Observed target data can be incomplete/stale and is not proof of enemy attack intent.
+- New localization keys cover seven languages and enter the managed font glyph set. UI toggles, color picker, size/height controls rendered headlessly; installed DLL and game state untouched.
+- Source of current Purify removability and Zantetsuken bind restriction: https://na.finalfantasyxiv.com/jobguide/samurai/ (read 2026-10-23). Status IDs remain explicit known client IDs; unknown effects do not trigger Purify. Native GetActionStatus determines current availability rather than a hard-coded cooldown/MP value.
+- Enemy LB readiness: not implemented; inspected published FFXIVClientStructs Character, LimitBreakController, EnemyListNumberArray, AddonEnemyList and PvPSpectator. No validated enemy-ID-to-gauge mapping found. CC team HUD and large PvP require further native validation; no guessed offsets, extrapolated readiness or nonfunctional toggle shipped.
+- Real native action acceptance, server success and in-match overlays remain unverified. No custom packet construction/sending or native state writes added. Runtime checks supplement, but do not replace, the client's/server's checks.
+
 # 1.1.0.6 persistence validation — 2026-10-22
 
 See PERSISTENCE_AUDIT_2026-10-22.md for measured logical write counts, migration, shutdown and fault-injection results. No production migration or installed DLL replacement.

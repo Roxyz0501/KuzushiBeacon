@@ -119,6 +119,7 @@ public sealed partial class Plugin : IDalamudPlugin
             await framework.RunOnFrameworkThread(() =>
             {
                 if (disposed) return;
+                if (targetOnly) zantetsukenAction.Purify.Cancel();
                 if (!config.Enabled || !S.ZantetsukenSupport || !client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable(); return; }
                 var player = objects.LocalPlayer;
                 if (player is null || !player.IsValid() || player.IsDead || player.ClassJob.RowId != Rules.SamuraiJob)
@@ -132,13 +133,13 @@ public sealed partial class Plugin : IDalamudPlugin
                         world, zantetsukenAction, On(43)?S.MinimumZantetsuken:1, zantetsukenAction.Included,r=>reason=r);
                     CountCommand(targetOnly?"ztarget":"zantetsuken",success,reason);
                     if(zantetsukenAction.Gate.Pending)requestPhase=1;
-                    if (!success) CommandUnavailable();
+                    if (!success) { zantetsukenAction.Purify.Cancel(); CommandUnavailable(); }
                     else if(On(99) && messages.Message(Now))chat.Print(L("検証：斬鉄剣の候補を選択しました（操作なし）","Dry run: selected a Zantetsuken candidate; no action performed."));
                 }
                 finally
                 {
                     zantetsukenAction.TargetOnly = false;
-                    if (zantetsukenAction.Gate.Pending && !observingRequest)
+                    if ((zantetsukenAction.Gate.Pending || zantetsukenAction.Purify.Pending) && !observingRequest)
                     { framework.Update += ObserveRequest; observingRequest = true; }
                 }
             });
@@ -158,22 +159,34 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         try
         {
-            if (!client.IsLoggedIn || !client.IsPvPExcludingDen) zantetsukenAction.Gate.Reset();
+            if (!config.Enabled || !S.ZantetsukenSupport || !client.IsLoggedIn || !client.IsPvPExcludingDen) { ResetRequest(); return; }
             else if (GameZantetsukenAction.TryReadGauge(out var full))
             {
+                if (zantetsukenAction.TakePurifyFollowup(Now, !disposed && !faulted, full))
+                {
+                    var player = objects.LocalPlayer;
+                    // Fresh selection and all coverage/exclusion conditions are rechecked after removal.
+                    if (player != null)
+                    {
+                        zantetsukenAction.TargetOnly = false;
+                        if (!Zantetsuken.Execute(true, player.EntityId, player.Position, targets.Target?.GameObjectId ?? 0,
+                            world, zantetsukenAction, On(43)?S.MinimumZantetsuken:1, zantetsukenAction.Included)) CommandUnavailable();
+                    }
+                }
                 zantetsukenAction.ObserveRequest(Now, full);
                 if (!full) requestPhase = 2;
                 else if (!zantetsukenAction.Gate.Pending) requestPhase = 0;
             }
+            else zantetsukenAction.Purify.Cancel();
         }
-        catch (Exception ex) { if (messages.Message(Now)) log.Error(ex, "Could not observe pending LB request; retry remains blocked."); }
-        if (!zantetsukenAction.Gate.Pending && observingRequest)
+        catch (Exception ex) { zantetsukenAction.Purify.Cancel(); if (messages.Message(Now)) log.Error(ex, "Could not observe pending LB request; continuation cancelled."); }
+        if (!zantetsukenAction.Gate.Pending && !zantetsukenAction.Purify.Pending && observingRequest)
         { framework.Update -= ObserveRequest; observingRequest = false; }
     }
 
     private void ResetRequest()
     {
-        zantetsukenAction.Gate.Reset();requestPhase=0;
+        zantetsukenAction.Gate.Reset();zantetsukenAction.Purify.Cancel();requestPhase=0;
         if (observingRequest) framework.Update -= ObserveRequest;
         observingRequest = false;
     }

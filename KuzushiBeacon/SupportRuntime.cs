@@ -38,7 +38,7 @@ public sealed partial class Plugin
     private Observation? focusedEnemy, currentObservation;
     private Actor? recommended;
     private int requestPhase;
-    private string requestState=>requestPhase switch {1=>L("要求済み","Requested"),2=>L("LB消費確認","LB consumption observed"),_=>L("待機","Idle")};
+    private string requestState=>zantetsukenAction.Purify.Pending?T("PurifyWaiting"):requestPhase switch {1=>L("要求済み","Requested"),2=>L("LB消費確認","LB consumption observed"),_=>L("待機","Idle")};
     private DateTimeOffset? reviewStarted;
     private Task reviewWrite=Task.CompletedTask;
     private int reviewPage;

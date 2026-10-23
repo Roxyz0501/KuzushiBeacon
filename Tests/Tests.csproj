@@ -12,6 +12,7 @@
     <Compile Include="../KuzushiBeacon/SupportOptions.cs" Link="SupportOptions.cs" />
     <Compile Include="../KuzushiBeacon/Ledger/Configuration.cs" Link="LedgerConfiguration.cs" />
     <Compile Include="../KuzushiBeacon/LowHpTarget.cs" Link="LowHpTarget.cs" />
+    <Compile Include="../KuzushiBeacon/PurifyFollowup.cs" Link="PurifyFollowup.cs" />
     <Compile Include="../KuzushiBeacon/RequestGate.cs" Link="RequestGate.cs" />
     <Compile Include="../KuzushiBeacon/Zantetsuken.cs" Link="Zantetsuken.cs" />
     <Compile Include="../KuzushiBeacon/Tracking.cs" Link="Tracking.cs" />

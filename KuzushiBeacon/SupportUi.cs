@@ -208,6 +208,18 @@ public sealed partial class Plugin
             case 43: changed|=ImGui.SliderInt(L("斬鉄剣の最低人数","Minimum Zantetsuken targets"),ref S.MinimumZantetsuken,1,20);break;
             case 47: changed|=ImGui.SliderFloat(L("急減の判定（%/秒）","Rapid loss (%/s)"),ref S.RapidLossPercent,1,100);break;
             case 48: changed|=ImGui.SliderFloat(L("低MPの判定","Low MP threshold"),ref S.LowMp,0,10000,"%.0f");break;
+            case 56:
+                changed|=ImGui.Checkbox(T("FocusHud"),ref S.FocusHud);
+                changed|=ImGui.Checkbox(T("FocusOverhead"),ref S.FocusOverhead);
+                if(S.FocusOverhead)
+                {
+                    ImGui.Indent();
+                    changed|=PickColor(T("CountColor")+"###FocusColor",ref S.FocusColor);
+                    changed|=ImGui.SliderFloat(T("CountSize")+"###FocusSize",ref S.FocusSize,12,96,"%.0f px");
+                    changed|=ImGui.SliderFloat(T("CountHeight")+"###FocusHeight",ref S.FocusHeight,0,6,"%.1f m");
+                    ImGui.Unindent();
+                }
+                break;
             case 57: changed|=ImGui.SliderInt(L("集中攻撃の人数","Focus fire threshold"),ref S.FocusCount,1,20);break;
             case 58: changed|=ImGui.SliderInt(L("敵の増加人数","Enemy increase threshold"),ref S.NearbyIncrease,1,20);break;
             case 63: changed|=ImGui.SliderInt(L("人数不利の差","Disadvantage threshold"),ref S.Disadvantage,1,20);break;
@@ -371,7 +383,8 @@ public sealed partial class Plugin
             Row(49,(player.CurrentMp/2000).ToString());Row(50,guardReady?"✓":"—");Row(51,$"{Math.Max(0,guardTime-(now-supportAt)):F1}s");Row(52,purifyReady?"✓":"—");
             if(On(53)&&selfControls.Any(c=>c.Purify))rows.Add(L("浄化対象あり !","Purifiable effect !"));
             if(On(54))foreach(var control in selfControls)rows.Add($"{StatusRules.Label(control.Id,config.Language=="ja")}: {Math.Max(0,control.Seconds-(now-supportAt)):F1}s");
-            Row(55,$"{resilience:F1}s");Row(56,focusEnemies.ToString());Row(61,nearbyAllies.ToString());Row(62,L($"味方 {nearbyAllies} / 敵 {nearbyEnemies}",$"Allies {nearbyAllies} / Enemies {nearbyEnemies}"));
+            Row(55,$"{resilience:F1}s");if(S.FocusHud)Row(56,focusEnemies.ToString());
+            if(On(56)&&S.FocusOverhead)LabelAt(player.Position+Vector3.UnitY*S.FocusHeight,string.Format(T("FocusCountText"),focusEnemies),ImGui.ColorConvertFloat4ToU32(S.FocusColor),0,S.FocusSize);Row(61,nearbyAllies.ToString());Row(62,L($"味方 {nearbyAllies} / 敵 {nearbyEnemies}",$"Allies {nearbyAllies} / Enemies {nearbyEnemies}"));
             Row(64,float.IsPositiveInfinity(nearestAlly)?"—":$"{nearestAlly:F1}m");Row(73,sharedTarget.ToString());
             if(On(66)&&nearbyAllies>0)DrawDirection(draw,player.Position,allyCenter,good,"+");
             if(On(75)&&retreatDirection!=Vector3.Zero)DrawDirection(draw,player.Position,player.Position+retreatDirection*10,other,"~");

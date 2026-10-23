@@ -79,6 +79,10 @@ public sealed class SupportOptions
     public bool LedgerEnabled;
     public bool KuzushiDisplay=true, OwnKuzushiDisplay=true, KuzushiFullLbOnly;
     public bool ZantetsukenSupport=true, SamuraiNotifications=true;
+    public bool PurifyBeforeZantetsuken = true;
+    public bool FocusOverhead = true, FocusHud = true;
+    public float FocusSize = 24, FocusHeight = 3.5f;
+    public Vector4 FocusColor = new(1,.3f,.2f,1);
     public bool BestMarker=true, BestLine;
     public Vector4 TimerColor=new(1,.9f,.2f,1), ExpiringColor=new(1,.25f,.2f,1);
     public float TimerSize=18, TimerHeight=3;
@@ -158,6 +162,7 @@ public sealed class SupportOptions
         FocusCount=Math.Clamp(FocusCount,1,50);NearbyIncrease=Math.Clamp(NearbyIncrease,1,50);Disadvantage=Math.Clamp(Disadvantage,1,50);
         KuzushiTone=Math.Clamp(KuzushiTone,0,2);LbTone=Math.Clamp(LbTone,0,2);DangerTone=Math.Clamp(DangerTone,0,2);
         Vector4 Color(Vector4 c)=>new(F(c.X,0,1,1),F(c.Y,0,1,1),F(c.Z,0,1,1),F(c.W,0,1,1));
+        FocusSize=F(FocusSize,12,96,24);FocusHeight=F(FocusHeight,0,6,3.5f);FocusColor=Color(FocusColor);
         TimerSize=F(TimerSize,12,96,18);TimerHeight=F(TimerHeight,0,6,3);
         BestMarkerSize=F(BestMarkerSize,5,30,14);BestMarkerHeight=F(BestMarkerHeight,0,6,4);
         BestLineWidth=F(BestLineWidth,.5f,5,1.5f);BestLineHeight=F(BestLineHeight,0,6,.8f);
