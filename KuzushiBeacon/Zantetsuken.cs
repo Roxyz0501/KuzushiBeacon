@@ -4,6 +4,9 @@ namespace KuzushiBeacon;
 
 public interface IZantetsukenAction
 {
+    void BeginAttempt() { }
+    string SelectionFailure => "range, LoS or action unavailable";
+    string FailureReason => "action rejected";
     bool CanUse(Actor target);
     bool TryExecute(Actor target, uint owner);
 }
@@ -19,6 +22,8 @@ public static class Zantetsuken
     {
         bool Fail(string reason){failure?.Invoke(reason);return false;}
         if (!allowed || !Rules.ValidId(owner) || !Finite(origin)) return Fail("conditions");
+        action.BeginAttempt();
+        var excluded = 0;
         var candidates = new List<Actor>();
         int visited = 0;
         foreach (var actor in world.Players)
@@ -26,15 +31,16 @@ public static class Zantetsuken
             if (visited++ >= Tracker.MaxCandidates) break;
             if (!Rules.ValidId(actor.EntityId) || actor.EntityId == owner || !actor.Alive
                 || !actor.Targetable || !Finite(actor.Position)) continue;
-            if (include != null && !include(actor)) continue;
             var remaining = world.OwnKuzushiRemaining(actor.Index, owner);
-            if (float.IsFinite(remaining) && remaining > 0) candidates.Add(actor);
+            if (!float.IsFinite(remaining) || remaining <= 0) continue;
+            if (include != null && !include(actor)) { excluded++; continue; }
+            candidates.Add(actor);
         }
         var selection = FindBest(candidates, origin, currentTarget, action.CanUse);
-        if(candidates.Count==0)return Fail("no eligible Kuzushi");
-        if(selection.Target is not {} selected)return Fail("range, LoS or action unavailable");
+        if(candidates.Count==0)return Fail(excluded > 0 ? "excluded" : "no eligible Kuzushi");
+        if(selection.Target is not {} selected)return Fail(action.SelectionFailure);
         if(selection.Count<minimum)return Fail("minimum coverage");
-        return action.TryExecute(selected,owner)||Fail("action rejected");
+        return action.TryExecute(selected,owner)||Fail(action.FailureReason);
     }
 
     public static (Actor? Target, int Count) FindBest(IReadOnlyList<Actor> candidates, Vector3 origin,

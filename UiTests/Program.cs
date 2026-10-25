@@ -20,6 +20,7 @@ internal static unsafe class Program
    Call("Open");io.Fonts.Build();
    var glyphs=(string)type.Assembly.GetType("KuzushiBeacon.SupportGlyphs")!.GetField("Text")!.GetRawConstantValue()!;
    glyphs+=(string)type.Assembly.GetType("KuzushiBeacon.HistoryFilesView")!.GetProperty("FontText")!.GetValue(null)!;
+   glyphs+=(string)type.Assembly.GetType("KuzushiBeacon.CommandFeedback")!.GetProperty("FontText")!.GetValue(null)!;
    foreach(var f in UiStub.Fonts)foreach(var ch in glyphs.Distinct())
     if(f.FindGlyphNoFallback(ch)==null)throw new Exception("Missing support glyph U+"+((int)ch).ToString("X4"));
    var textures=new Dictionary<ulong,(nint,int,int)>();

@@ -119,12 +119,14 @@ public sealed partial class Plugin : IDalamudPlugin
             await framework.RunOnFrameworkThread(() =>
             {
                 if (disposed) return;
-                if (targetOnly) zantetsukenAction.Purify.Cancel();
-                if (!config.Enabled || !S.ZantetsukenSupport || !client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable(); return; }
+                if (!config.Enabled || !S.ZantetsukenSupport) { CommandUnavailable("disabled"); return; }
+                if (!client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable("not pvp"); return; }
                 var player = objects.LocalPlayer;
-                if (player is null || !player.IsValid() || player.IsDead || player.ClassJob.RowId != Rules.SamuraiJob)
-                { CommandUnavailable(); return; }
-                if (!GameZantetsukenAction.IsLimitBreakFull()) { CountCommand(targetOnly?"ztarget":"zantetsuken",false,"LB not full"); CommandUnavailable(); return; }
+                if (player is null || !player.IsValid()) { CommandUnavailable("player unavailable"); return; }
+                if (player.IsDead) { CommandUnavailable("dead"); return; }
+                if (player.ClassJob.RowId != Rules.SamuraiJob) { CommandUnavailable("not samurai"); return; }
+                if (!GameZantetsukenAction.TryReadGauge(out var full)) { CommandUnavailable("gauge unavailable"); return; }
+                if (!full) { CountCommand(targetOnly?"ztarget":"zantetsuken",false,"LB not full"); CommandUnavailable("LB not full"); return; }
                 zantetsukenAction.TargetOnly = targetOnly;
                 try
                 {
@@ -133,26 +135,28 @@ public sealed partial class Plugin : IDalamudPlugin
                         world, zantetsukenAction, On(43)?S.MinimumZantetsuken:1, zantetsukenAction.Included,r=>reason=r);
                     CountCommand(targetOnly?"ztarget":"zantetsuken",success,reason);
                     if(zantetsukenAction.Gate.Pending)requestPhase=1;
-                    if (!success) { zantetsukenAction.Purify.Cancel(); CommandUnavailable(); }
+                    if (!success) CommandUnavailable(reason);
                     else if(On(99) && messages.Message(Now))chat.Print(L("検証：斬鉄剣の候補を選択しました（操作なし）","Dry run: selected a Zantetsuken candidate; no action performed."));
                 }
                 finally
                 {
                     zantetsukenAction.TargetOnly = false;
-                    if ((zantetsukenAction.Gate.Pending || zantetsukenAction.Purify.Pending) && !observingRequest)
+                    if (zantetsukenAction.Gate.Pending && !observingRequest)
                     { framework.Update += ObserveRequest; observingRequest = true; }
                 }
             });
         }
         catch (Exception ex)
         {
-            if (messages.Message(Now)) log.Error(ex, "Zantetsuken command failed; no retry will be attempted.");
+            if (CommandUnavailable("internal error")) log.Error(ex, "Zantetsuken command failed; no retry will be attempted.");
         }
     }
 
-    private void CommandUnavailable()
+    private bool CommandUnavailable(string reason = "conditions")
     {
-        if (messages.Message(Now)) chat.Print(T("ExecuteUnavailable"));
+        if (!messages.Message(Now)) return false;
+        chat.Print("PvP Supporter: " + CommandFeedback.Format(config.Language, reason));
+        return true;
     }
 
     private void ObserveRequest(IFramework _)
@@ -162,31 +166,26 @@ public sealed partial class Plugin : IDalamudPlugin
             if (!config.Enabled || !S.ZantetsukenSupport || !client.IsLoggedIn || !client.IsPvPExcludingDen) { ResetRequest(); return; }
             else if (GameZantetsukenAction.TryReadGauge(out var full))
             {
-                if (zantetsukenAction.TakePurifyFollowup(Now, !disposed && !faulted, full))
-                {
-                    var player = objects.LocalPlayer;
-                    // Fresh selection and all coverage/exclusion conditions are rechecked after removal.
-                    if (player != null)
-                    {
-                        zantetsukenAction.TargetOnly = false;
-                        if (!Zantetsuken.Execute(true, player.EntityId, player.Position, targets.Target?.GameObjectId ?? 0,
-                            world, zantetsukenAction, On(43)?S.MinimumZantetsuken:1, zantetsukenAction.Included)) CommandUnavailable();
-                    }
-                }
+                var wasPending = zantetsukenAction.Gate.Pending;
                 zantetsukenAction.ObserveRequest(Now, full);
                 if (!full) requestPhase = 2;
-                else if (!zantetsukenAction.Gate.Pending) requestPhase = 0;
+                else if (wasPending && (!zantetsukenAction.Gate.Pending || zantetsukenAction.ObservationExpired(Now)))
+                {
+                    var reason = zantetsukenAction.Gate.Pending ? "unconfirmed" : "queue cancelled";
+                    zantetsukenAction.Gate.Reset(); requestPhase = 0;
+                    CommandUnavailable(reason);
+                }
             }
-            else zantetsukenAction.Purify.Cancel();
+            else { zantetsukenAction.Gate.Reset(); CommandUnavailable("gauge unavailable"); }
         }
-        catch (Exception ex) { zantetsukenAction.Purify.Cancel(); if (messages.Message(Now)) log.Error(ex, "Could not observe pending LB request; continuation cancelled."); }
-        if (!zantetsukenAction.Gate.Pending && !zantetsukenAction.Purify.Pending && observingRequest)
+        catch (Exception ex) { zantetsukenAction.Gate.Reset(); if (CommandUnavailable("internal error")) log.Error(ex, "Could not observe pending LB request."); }
+        if (!zantetsukenAction.Gate.Pending && observingRequest)
         { framework.Update -= ObserveRequest; observingRequest = false; }
     }
 
     private void ResetRequest()
     {
-        zantetsukenAction.Gate.Reset();zantetsukenAction.Purify.Cancel();requestPhase=0;
+        zantetsukenAction.Gate.Reset();requestPhase=0;
         if (observingRequest) framework.Update -= ObserveRequest;
         observingRequest = false;
     }

@@ -38,7 +38,7 @@ public sealed partial class Plugin
     private Observation? focusedEnemy, currentObservation;
     private Actor? recommended;
     private int requestPhase;
-    private string requestState=>zantetsukenAction.Purify.Pending?T("PurifyWaiting"):requestPhase switch {1=>L("要求済み","Requested"),2=>L("LB消費確認","LB consumption observed"),_=>L("待機","Idle")};
+    private string requestState=>requestPhase switch {1=>L("要求済み","Requested"),2=>L("LB消費確認","LB consumption observed"),_=>L("待機","Idle")};
     private DateTimeOffset? reviewStarted;
     private Task reviewWrite=Task.CompletedTask;
     private int reviewPage;
@@ -144,7 +144,7 @@ public sealed partial class Plugin
         foreach(var key in hpHistory.Keys.Where(k=>k!=player.GameObjectId&&!observations.Any(o=>o.Actor.ObjectId==k)).ToArray())hpHistory.Remove(key);
         foreach(var key in approachDistances.Keys.Where(k=>!On(59)||!observations.Any(o=>o.Actor.ObjectId==k)).ToArray())approachDistances.Remove(key);
         currentObservation=observations.Where(o=>o.Actor.ObjectId==targets.Target?.GameObjectId).Select(o=>(Observation?)o).FirstOrDefault();
-        currentCoverage=currentObservation is {} current&&(On(20)||On(21)||On(23))?SupportMath.Count(current,observations,S.AreaRadius,S.LowHpPercent):default;
+        currentCoverage=currentObservation is {} current&&(On(20)||On(21)||On(23))?SupportMath.Count(current,observations,S.AreaRadius,S.LowHpPercent,S.ExcludeGuard,S.ExcludeInvulnerable):default;
         var attackRange=SupportOptions.JobRange(player.ClassJob.RowId,S.MeleeRange,S.RangedRange);
         attackCandidates=On(29)?observations.Where(o=>o.Enemy&&o.Eligible(S.ExcludeGuard,S.ExcludeInvulnerable)&&o.Distance(player.Position,player.HitboxRadius)<=attackRange).OrderBy(o=>o.Hp).Take(3).ToArray():[];
         var focusStart=watch.Elapsed.TotalMilliseconds;
@@ -162,7 +162,7 @@ public sealed partial class Plugin
             foreach(var center in observations)
             {
                 if(!center.Enemy||!center.Eligible(S.ExcludeGuard,S.ExcludeInvulnerable)||center.Distance(player.Position,player.HitboxRadius)>range)continue;
-                areaCandidates.Add(SupportMath.Count(center,observations,S.AreaRadius,S.LowHpPercent));
+                areaCandidates.Add(SupportMath.Count(center,observations,S.AreaRadius,S.LowHpPercent,S.ExcludeGuard,S.ExcludeInvulnerable));
                 if(On(97)&&watch.Elapsed.TotalMilliseconds-geometryStart>=S.BudgetMs){coveragePartial=true;break;}
             }
             areaCandidates.Sort((a,b)=>b.Count!=a.Count?b.Count.CompareTo(a.Count):a.Center.Actor.EntityId.CompareTo(b.Center.Actor.EntityId));

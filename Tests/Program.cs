@@ -11,25 +11,27 @@ void Check(bool result, string name)
     checks++;
 }
 
-var followup = new PurifyFollowup();
-Check(!followup.Take(1,true,false,true), "no implicit action without command");
-followup.Begin(1,10,20);
-Check(!followup.Take(1.1,true,true,true) && followup.Pending, "wait for status removal");
-Check(!followup.Take(1.2,true,false,false) && followup.Pending, "wait for animation lock");
-Check(followup.Take(1.3,true,false,true) && !followup.Pending, "one continuation after ready");
-Check(!followup.Take(1.4,true,false,true), "no repeated continuation");
-followup.Begin(2,10,20);
-Check(!followup.Take(4,true,false,true) && !followup.Pending, "timeout cannot execute late");
-followup.Begin(5,10,20);
-Check(!followup.Take(5.1,false,false,true) && !followup.Pending, "invalid context cancels");
-followup.Begin(10,10,20);
-for(int i=1;i<100;i++) Check(!followup.Take(10+i*.01,true,i<50,false) && followup.Pending, "burst during Purify cannot reset or cancel continuation");
-Check(followup.Take(11.1,true,false,true), "LB continues once after repeated presses during removal and animation lock");
-followup.Begin(20,10,20);
-for(int i=1;i<20;i++) followup.Take(20+i*.1,true,true,false);
-Check(!followup.Take(22,true,false,true) && !followup.Pending, "burst never extends timeout");
-foreach(var id in new uint[]{1343,1345,1347,3085,3134,3219}) Check(PurifyFollowup.BlockingStatus(id), "purifiable blocking status");
-foreach(var id in new uint[]{1344,3167,3022,1348,3174,0}) Check(!PurifyFollowup.BlockingStatus(id), "do not waste Purify on nonblocking or uncleansable effect");
+var oldPurify = JsonConvert.DeserializeObject<SupportOptions>("{\"PurifyBeforeZantetsuken\":true}")!;
+oldPurify.Sanitize();Check(!oldPurify.PurifyBeforeZantetsuken,"saved enabled auto Purify is disabled on upgrade");
+Check(CommandFeedback.Format("ja","bind|silence").Contains("バインド") && CommandFeedback.Format("ja","bind|silence").Contains("沈黙"),"observed simultaneous disabling effects remain distinguishable");
+Check(CommandFeedback.StatusReason(1345)=="bind" && CommandFeedback.StatusReason(1347)=="silence" && CommandFeedback.StatusReason(99999)=="","known status mapping and unknown status handling");
+foreach(var language in Loc.Languages)
+{
+    Check(CommandFeedback.Format(language.Code,"native:123").Contains("123"),"native diagnostic code preserved in each language");
+    Check(!CommandFeedback.Format(language.Code,"range").Contains("{0}") && CommandFeedback.Format(language.Code,"unconfirmed").Length>20,"localized reason and uncertain outcome text");
+}
+Check(CommandFeedback.Format(null,"unexpected") == CommandFeedback.Format("en","action rejected"),"unknown condition/language fallback is honest");
+{
+    var w=new FakeWorld(); var a=new FakeAction(); string why="";
+    bool Run(int min=1,Func<Actor,bool>? include=null) => Zantetsuken.Execute(true,1,Vector3.Zero,0,w,a,min,include,r=>why=r);
+    Check(!Run() && why=="no eligible Kuzushi","no observed own Kuzushi reason");
+    w.Actors.Add(new(2,2,2,new(2,0,0),true,true));w.Statuses[2]=(3202,1,2);
+    Check(!Run(include:_=>false) && why=="excluded","exclusion distinct from absent Kuzushi");
+    a.Blocked.Add(2);Check(!Run() && why=="range, LoS or action unavailable","selection failure retained");a.Blocked.Clear();
+    Check(!Run(2) && why=="minimum coverage","minimum count reason");
+    a.Accept=false;Check(!Run() && why=="action rejected","native rejection propagated");
+    a.Accept=true;Check(Run() && a.Attempts==2,"failure diagnostics do not block next explicit execution");
+}
 
 Check(Rules.CanRun(true, true, true, true, true, 34), "samurai in PvP");
 foreach (var state in new[] {
@@ -271,6 +273,10 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     var crowd=new[]{O(2,0,80),O(3,4,20),O(4,5.01f,10),O(5,1,5,false)};
     var coverage=SupportMath.Count(crowd[0],crowd,5,30);
     Check(coverage.Count==2&&coverage.LowCount==1,"area geometry excludes allies and counts HP threshold");
+    var protectedCrowd = new[]{crowd[0] with {Guard=true},crowd[1] with {Invulnerable=true},crowd[2] with {Actor=crowd[2].Actor with {Position=new(1,0,0),Targetable=false}}};
+    Check(SupportMath.Count(crowd[0],protectedCrowd,5,30,true,true).Count==0,"excluded and untargetable victims never inflate AoE count");
+    Check(SupportMath.Count(crowd[0],protectedCrowd,5,30,false,true).Count==1,"Guard filter independently changes victim count");
+    Check(SupportMath.Count(crowd[0],protectedCrowd,5,30,true,false).LowCount==1,"invulnerability filter changes low-HP victim count");
     Check(crowd[1].Distance(Vector3.Zero,.5f)==3,"hitbox adjusted displayed distance");
     Check(!(crowd[0] with{Guard=true}).Eligible(true,false)&&!(crowd[0] with{Invulnerable=true}).Eligible(false,true),"independent status exclusions");
     var w=new FakeWorld();foreach(var o in crowd.Where(o=>o.Enemy)){w.Actors.Add(o.Actor);w.Statuses[o.Actor.Index]=(3202,1,2);}

@@ -1,3 +1,13 @@
+# 1.1.0.8 recheck — 2026-10-25
+
+- 394 managed checks: target selection/failure paths, source/expiry/range/coverage, feature settings, known status diagnostics and seven message languages, clearing legacy enabled Purify, persistence/recovery and idle work. Deleted 120 obsolete Purify-continuation checks with the removed feature; totals are not directly comparable to 1.1.0.7.
+- 78 real-host lifecycle checks: actual command dispatch for disabled/outside-PvP/dead/wrong-job/missing-player states emits specific Japanese text, ten immediate presses produce one MESSAGE, no candidate scans/native calls on these early failures. Existing per-press validation and lifecycle unsubscribe regressions retained.
+- 2,789 Ledger checks: inference replay, storage, privacy, mocked webhook, localization. Cached history reads/writes remain zero. 487 headless production UI frames: categories, hidden child controls, tooltips, sidebar and seven-language font coverage including every new diagnostic character.
+- Review scope: command entry/target filtering/native adapter/request observation, actor snapshots/expiry, notifications and coverage, settings-to-runtime controls, lifecycle, persistence and Ledger regressions. Found/fixed loss of precise failure reasons, unbounded pending LB observation, and missing Guard/invulnerability filters for AoE victims (centers already filtered). Native action status is read for diagnosis only, never used to suppress explicit LB attempts.
+- Purify execution, continuation and UI setting removed. Legacy persisted true is sanitized false; only the LB UseAction call remains. No automatic action/retry or packet construction introduced.
+- A request with no observed LB consumption after three seconds ends observation and reports unknown outcome, not confirmed failure. Queue disappearance is reported separately. No native-field writes and no input throttle added. Actor/state observations are not authoritative server rejection reasons; unknown codes remain explicit.
+- New tests cover AoE exclusion toggles independently, low-HP counts, and untargetable victims. Release zero warnings/errors. Installed plugin DLL untouched. Real game acceptance, server rejection reasons, latency, rendering and physical performance remain unverified; this recheck does not establish absence of every bug.
+
 # 1.1.0.7 command continuation and focus display — 2026-10-23
 
 - 487 managed checks, 68 host lifecycle checks, 487 headless UI frames; clean Release build (zero warnings/errors).

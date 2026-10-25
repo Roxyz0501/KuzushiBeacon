@@ -220,6 +220,18 @@ foreach (var pvp in new[] { false, true })
     Check(files.Length==1&&files[0].Contains(started.UtcDateTime.ToString("yyyyMMdd")),"dispose completes pending review save in start-day partition");
     Check(((Task)typeof(Plugin).GetField("reviewWrite",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!).IsCompleted&&host.TotalSubscriptions==0,"review writer joined and subscriptions removed before dispose returns");
 }
+foreach(var reason in new[]{"pvp","disabled","job","dead","missing"})
+{
+    var host=new Host {Pvp=reason!="pvp",Job=reason=="job"?0u:Rules.SamuraiJob,Dead=reason=="dead",PlayerAvailable=reason!="missing"};
+    host.Config.Language="ja";
+    if(reason=="disabled")host.Config.Enabled=false;
+    using var plugin=host.Load();
+    for(int i=0;i<10;i++)host.Commands["/kuzushizantetsuken"].Handler("/kuzushizantetsuken","");
+    var expected=reason switch {"pvp"=>"PvPコンテンツ", "disabled"=>"オフ", "job"=>"侍では", "dead"=>"戦闘不能", _=>"情報を取得"};
+    Check(host.ChatTexts.Count==1 && host.ChatTexts[0].Contains(expected),"real command localized reason and burst throttle: "+reason);
+    Check(host.PlayerEnumerations==0 && host.Errors==0,"invalid prerequisites avoid scans and native calls: "+reason);
+}
+
 Console.WriteLine($"PASS {checks} host lifecycle checks (real Plugin + thread-enforcing service doubles).");
 
 sealed class Host
@@ -242,6 +254,8 @@ sealed class Host
     public int IllegalReads;
     public int Errors;
     public int ChatMessages;
+    public List<string> ChatTexts = [];
+    public bool Dead;
     public IFramework Framework { get; }
     public Host() => Framework = Stub<IFramework>("framework");
     public Plugin Load() => new(Stub<IDalamudPluginInterface>("pi"), Stub<IClientState>("client"),
@@ -283,7 +297,7 @@ sealed class Host
         }
         switch (name)
         {
-            case "Print": ChatMessages++; return null;
+            case "Print": ChatMessages++; ChatTexts.Add(args[0]?.ToString() ?? ""); return null;
             case "AddHandler": Commands.Add((string)args[0]!, (CommandInfo)args[1]!); return true;
             case "RemoveHandler": return Commands.Remove((string)args[0]!);
             case "GetPluginConfig": return Config;
@@ -307,6 +321,7 @@ sealed class Host
                 return PlayerAvailable ? player ??= Stub(method.ReturnType, "player") : null;
             case "IsValid": ValidityReads++; return true;
             case "get_EntityId": return 123u;
+            case "get_IsDead": return Dead;
             case "get_PlayerObjects": PlayerEnumerations++; return Array.Empty<Dalamud.Game.ClientState.Objects.Types.IBattleChara>();
             case "get_ClassJob": return new RowRef<ClassJob>(null!, Job, null);
             case "Error": Interlocked.Increment(ref Errors); return null;

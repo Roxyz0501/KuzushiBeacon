@@ -79,7 +79,7 @@ public sealed class SupportOptions
     public bool LedgerEnabled;
     public bool KuzushiDisplay=true, OwnKuzushiDisplay=true, KuzushiFullLbOnly;
     public bool ZantetsukenSupport=true, SamuraiNotifications=true;
-    public bool PurifyBeforeZantetsuken = true;
+    public bool PurifyBeforeZantetsuken = false;
     public bool FocusOverhead = true, FocusHud = true;
     public float FocusSize = 24, FocusHeight = 3.5f;
     public Vector4 FocusColor = new(1,.3f,.2f,1);
@@ -145,6 +145,7 @@ public sealed class SupportOptions
     public static float CommandRange(uint job,float requested,bool ally=false) => Math.Min(requested,ally?20:JobRange(job,3,20));
     public void Sanitize()
     {
+        PurifyBeforeZantetsuken = false; // Retained only to clear legacy saved configuration.
         Features ??= []; DisabledGroups ??= [];
         foreach(var set in new[]{Features,SmallFeatures,LargeFeatures}.Where(s=>s!=null))
             if(set!.Remove(34))set.Add(33); // Merge duplicate acquisition alerts, including saved profiles.

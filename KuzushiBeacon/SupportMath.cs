@@ -12,11 +12,11 @@ public readonly record struct Observation(Actor Actor, uint Hp, uint MaxHp, floa
 public readonly record struct Coverage(Observation Center, int Count, int LowCount);
 public static class SupportMath
 {
-    public static Coverage Count(Observation center,IReadOnlyList<Observation> enemies,float radius,float lowPercent)
+    public static Coverage Count(Observation center,IReadOnlyList<Observation> enemies,float radius,float lowPercent,bool excludeGuard=false,bool excludeInvulnerable=false)
     {
         int count=0,low=0;
         foreach(var e in enemies)
-            if(e.Enemy && e.Actor.Alive && Vector3.DistanceSquared(e.Actor.Position,center.Actor.Position)<=radius*radius)
+            if(e.Enemy && e.Eligible(excludeGuard,excludeInvulnerable) && Vector3.DistanceSquared(e.Actor.Position,center.Actor.Position)<=radius*radius)
             { count++; if(e.Percent<=lowPercent) low++; }
         return new(center,count,low);
     }
