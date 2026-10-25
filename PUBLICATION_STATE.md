@@ -1,3 +1,13 @@
+## 2026-10-25 — PvP Supporter 1.1.0.8
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.8
+- Source/tag: a5fc156f817422aa1b900ef35d69048bb17b2fbf.
+- ZIP: 206,050 bytes; SHA256 4C801D32D144EEC63E3D1DB6F0DE10A8623F12787D54BCE32A61268841FAED8A. Anonymous redownload equals local ZIP and current Release DLL; eight allowed entries, version and internal identity verified. Repository HTTP 200, icon image/png.
+- Shared index commit: 3a573411c84831817c8c939ae6df3d9c6f466215. Pinned connector verifies 1.1.0.8; thirteen other entries unchanged. First ordinary anonymous main URL response cached 1.1.0.7; CDN propagation is separate from committed registration.
+- Explicit LB commands now report specific prerequisite/selection reasons and observed control effects/casting/animation lock/native status codes on rejected execution. Unknown outcomes are not labeled confirmed failures; observation expires after three seconds without any retry. MESSAGE and exception log throttling preserved independently from inputs.
+- User requested automatic debuff removal off: removed Purify execution/continuation/UI and sanitize legacy enabled flag false. No custom packets/native-field writes or automatic game actions added.
+- Whole-plugin recheck additionally fixed ordinary AoE victim counts ignoring Guard/invulnerability exclusion flags. 394 managed, 78 host, 2,789 Ledger checks and 487 headless UI frames; zero-warning/error Release. See VALIDATION.md for scope and limits. In-game native/server behavior remains unverified; installed DLL untouched.
+
 ## 2026-10-23 — PvP Supporter 1.1.0.7
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.7
