@@ -49,6 +49,10 @@ public sealed class HistoryStore(string root)
         Reads++; ReadBytes += file.Length;
         return JsonSerializer.Deserialize<T>(file) ?? throw new InvalidDataException("Invalid history");
     }
+    private static bool ValidSummary(MatchSummary? s) => s != null && s.Id != Guid.Empty
+        && s.Started != default && s.Ended != default && Enum.IsDefined(s.Mode) && Enum.IsDefined(s.Outcome)
+        && s.Arena != null && s.Player != null && s.Arena.Length <= 128 && s.Player.Length <= 128
+        && s.Kills >= 0 && s.Deaths >= 0 && (s.Assists == null || s.Assists >= 0);
     public void Save(string owner, MatchRecord record)
     {
         lock (gate)
@@ -93,7 +97,11 @@ public sealed class HistoryStore(string root)
                 foreach (var path in inventory.Skip(page * PageSize).Take(PageSize))
                 {
                     // A corrupt entry cannot prevent access to other matches.
-                    try { items.Add(Read<MatchSummary>(path, 4096)); }
+                    try
+                    {
+                        var summary = Read<MatchSummary>(path, 4096);
+                        if (ValidSummary(summary)) items.Add(summary);
+                    }
                     catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException) { }
                 }
                 rows = items.ToArray();
@@ -108,7 +116,9 @@ public sealed class HistoryStore(string root)
         lock (gate)
         {
             var record = Read<MatchRecord>(RecordStem(owner,summary) + ".match.json", MaxRecordBytes);
-            if (record.Schema != 1 || record.Summary.Id != summary.Id || record.Events.Length > MatchSession.MaxEvents) throw new InvalidDataException("Unsupported history");
+            if (record.Schema != 1 || !ValidSummary(record.Summary) || record.Summary.Id != summary.Id
+                || record.Events == null || record.Events.Length > MatchSession.MaxEvents
+                || record.Events.Any(e => e == null || e.Other == null || e.Other.Length > 128 || !Enum.IsDefined(e.Kind))) throw new InvalidDataException("Unsupported history");
             return record;
         }
     }

@@ -1,3 +1,13 @@
+# 1.1.0.9 full recheck — 2026-10-26
+
+- Reviewed command dispatch/eligibility/native adapter and observation cleanup; actor snapshots, statuses, expiry, geometry, notifications and settings dependencies; lifecycle subscriptions; review persistence, Ledger history/background work and UI paths. No claim of exhaustive bug absence or live-game verification.
+- Reproduced before fixes: new real-host recording-disable test failed because FinishReview gated finalization on the new disabled state, losing an already-authorized segment. New Ledger test with valid JSON `{}` and null required fields failed because these summaries reached the history page. Old code had no request reset in the shared Stop path used by job changes, PvP exit and disable.
+- Fixes: finalize an existing authorized review segment exactly once on disable, without starting new recording; validate summary identity/required fields/enums/counts and detail event schema before returning records; reset/unsubscribe pending LB observation in Stop.
+- 394 managed checks pass: targeting, filtering, feature settings, diagnostics/localization, notification math and persistence fault injection. 90 host checks pass: real start/disable/reconfigure review save, legacy never-enabled no-write behavior, real registered LB observer removal for job/leave/disable, no subsequent object/native access, command burst message suppression and full shutdown.
+- 2,791 Ledger checks pass: corrupted-schema row skipped while valid neighbor survives; null detail array raises InvalidDataException, not NullReferenceException; existing inference, storage/delivery dedupe, privacy and mocked-webhook tests. Storage probes unchanged: first page 25 reads/8700 bytes, 500 cached opens zero new reads/writes/bytes, concurrent page 25 reads, detail one read.
+- 487 production headless UI frames pass: all categories on/off, dependent controls/tooltips, sidebar and glyph checks. No unchanged configuration writes. Release zero warnings/errors; packaging preserves internal name and eight-entry allowlist. No installed DLL overwrite or production-data mutation.
+- Automatic Purify remains removed. No action retry, custom packet, hook or native-field write added. Runtime actor data, server acceptance, actual rendering and physical performance remain unverified.
+
 # 1.1.0.8 recheck — 2026-10-25
 
 - 394 managed checks: target selection/failure paths, source/expiry/range/coverage, feature settings, known status diagnostics and seven message languages, clearing legacy enabled Purify, persistence/recovery and idle work. Deleted 120 obsolete Purify-continuation checks with the removed feature; totals are not directly comparable to 1.1.0.7.

@@ -69,7 +69,7 @@ public static class FeatureHelp
         [83]=("/pvptrackで指定した味方が画面外にいる場合、投影できた方向を画面端に表示します。","Shows the tracked ally at the screen edge when offscreen and a valid projection is available."),
         [84]=("近接する頭上ラベルを上下にずらして重なりを軽減します。","Offsets overlapping overhead labels vertically."),
         [85]=("遠い対象の頭上ラベルを小さくします。基本サイズは共通の文字サイズです。","Shrinks distant overhead labels relative to the shared base text size."),
-        [86]=("試合終了時に有効な集計を端末内へ保存します。最大100試合、名前やプレイヤーIDは含めません。","Saves enabled aggregates locally at match end, retaining up to 100 matches without player names or IDs."),
+        [86]=("試合終了時に有効な集計を端末内へ保存します。記録をオフにした場合は、それまでの記録を一度保存して停止します。最大100試合、名前やプレイヤーIDは含めません。","Saves enabled aggregates locally at match end. Turning recording off saves the collected segment once before stopping. Retains up to 100 matches without player names or IDs."),
         [87]=("LBが満タンのまま経過した時間を集計します。試合保存はローカル記録もオンにしてください。","Accumulates time holding full LB; enable local summaries to persist it per match."),
         [88]=("侍のLB満タンと自分の崩しが揃った回数を集計します。","Counts distinct opportunities with full samurai LB and own Kuzushi."),
         [89]=("LB満タン時に観測した最大巻き込み人数を記録します。","Records the maximum observed full-LB Kuzushi coverage."),

@@ -232,6 +232,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void Stop()
     {
+        ResetRequest();
         if (subscribed)
         {
             framework.Update -= Update;

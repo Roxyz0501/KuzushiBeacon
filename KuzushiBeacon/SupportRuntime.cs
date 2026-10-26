@@ -248,7 +248,8 @@ public sealed partial class Plugin
     { FinishReview(); reviewCompleted=true; }
     private void FinishReview()
     {
-        if(config.Enabled&&On(86)&&reviewStarted is {} started)
+        // A started segment was authorized while recording was enabled. Finish it once on disable.
+        if(reviewStarted is {} started)
         {
             var record=new ReviewRecord(started,DateTimeOffset.UtcNow,On(94)?S.MatchNote:"",On(94)?new Dictionary<string,float>{{"MeleeRange",S.MeleeRange},{"RangedRange",S.RangedRange},{"AreaRadius",S.AreaRadius},{"LowHpPercent",S.LowHpPercent},{"AlertCount",S.AlertCount}}:null,On(87)?fullSeconds:null,
                 On(88)?opportunities:null,On(89)?peakCoverage:null,On(90)?new(commandCounts):null,On(91)?new(failureCounts):null,deathRecords.ToArray(),Guid.NewGuid());

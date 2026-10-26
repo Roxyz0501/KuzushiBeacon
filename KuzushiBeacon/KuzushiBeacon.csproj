@@ -8,7 +8,7 @@
     <AssemblyName>KuzushiBeacon</AssemblyName>
     <PathMap>$(MSBuildProjectDirectory)=/_/KuzushiBeacon</PathMap>
     <Authors>Roxyz0501</Authors>
-    <Version>1.1.0.8</Version>
+    <Version>1.1.0.9</Version>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <RepoUrl>https://github.com/Roxyz0501/KuzushiBeacon</RepoUrl>
     <IconUrl>https://raw.githubusercontent.com/Roxyz0501/KuzushiBeacon/main/KuzushiBeacon/images/icon.png</IconUrl>

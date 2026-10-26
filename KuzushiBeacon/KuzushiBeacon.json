@@ -6,7 +6,7 @@
   "Description": "PvP専用サポート。ジョブ連動/距離指定の最低HP・最寄り対象コマンド、崩しと斬鉄剣支援、範囲・生存・味方の表示と通知、戦績/キルログ/履歴/CSVを統合。機能別オンオフ、ジャンル別設定、通知音量、検証モードに対応。/pvpsupporter で設定。旧Kuzushi Beaconの内部ID・設定・コマンドを維持。",
   "DalamudApiLevel": 15,
   "ApplicableVersion": "any",
-  "AssemblyVersion": "1.1.0.8",
+  "AssemblyVersion": "1.1.0.9",
   "RepoUrl": "https://github.com/Roxyz0501/KuzushiBeacon",
   "IconUrl": "https://raw.githubusercontent.com/Roxyz0501/KuzushiBeacon/main/KuzushiBeacon/images/icon.png",
   "Tags": [

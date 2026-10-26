@@ -171,9 +171,8 @@ foreach (var pvp in new[] { false, true })
     Check(history.Count==1,"export-only mode loads existing summaries without recording enabled");
     var json=System.Text.Json.JsonSerializer.Serialize(history[0]);
     Check(json.Contains("1343")&&json.Contains("4.5")&&json.Contains("out of range"),"old anonymous death objects deserialize into typed review details");
-    type.GetField("reviewStarted",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,(DateTimeOffset?)DateTimeOffset.UtcNow);
     type.GetMethod("FinishReview",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
-    Check(history.Count==1,"recording disabled never appends a pending summary");
+    Check(history.Count==1,"recording never enabled does not create a summary");
     var counters=(Dictionary<string,long>)type.GetField("commandCounts",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
     counters["/pvplowhp"]=3;
     type.GetMethod("ReconcileLedger",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
@@ -232,6 +231,42 @@ foreach(var reason in new[]{"pvp","disabled","job","dead","missing"})
     Check(host.PlayerEnumerations==0 && host.Errors==0,"invalid prerequisites avoid scans and native calls: "+reason);
 }
 
+foreach(var master in new[]{false,true})
+{
+    var host=new Host {Pvp=true,DutyStarted=true};
+    host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
+    host.Config.Support.Features=[86,90];
+    using var plugin=host.Load();var type=typeof(Plugin);
+    Check(type.GetField("reviewStarted",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!=null,"review starts only while enabled in a duty");
+    var counts=(Dictionary<string,long>)type.GetField("commandCounts",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
+    counts["zantetsuken"]=2;
+    if(master)host.Config.Enabled=false;else host.Config.Support.SetFeature(86,false);
+    type.GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    ((Task)type.GetField("reviewWrite",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!).GetAwaiter().GetResult();
+    var root=Path.Combine(host.ConfigDirectory,"support-review");
+    var files=Directory.Exists(root)?Directory.GetFiles(root,"*.review.json",SearchOption.AllDirectories):[];
+    Check(files.Length==1 && File.ReadAllText(files[0]).Contains("zantetsuken"),"turning recording off preserves the already collected segment");
+    type.GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    Check(Directory.GetFiles(root,"*.review.json",SearchOption.AllDirectories).Length==1,"disabled reconfigure does not write duplicate review");
+}
+foreach(var stop in new[]{"job","leave","disable"})
+{
+    var host=new Host {Pvp=false};using var plugin=host.Load();var type=typeof(Plugin);
+    var adapter=type.GetField("zantetsukenAction",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
+    var gate=(RequestGate)adapter.GetType().GetProperty("Gate")!.GetValue(adapter)!;
+    var update=typeof(IFramework).GetEvent("Update")!;
+    var callback=Delegate.CreateDelegate(update.EventHandlerType!,plugin,type.GetMethod("ObserveRequest",BindingFlags.NonPublic|BindingFlags.Instance)!);
+    update.AddEventHandler(host.Framework,callback);
+    type.GetField("observingRequest",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,true);
+    gate.Begin(0);
+    if(stop=="job")host.Raise("client:ClassJobChanged",0u);
+    else if(stop=="leave")host.Raise("client:LeavePvP");
+    else {host.Config.Enabled=false;type.GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);}
+    Check(!gate.Pending && host.Count("framework:Update")==0,"stop removes pending LB diagnostic callback: "+stop);
+    var reads=host.ObjectReads;host.Raise("framework:Update",host.Framework);
+    Check(host.ObjectReads==reads && host.Errors==0,"no native/player observation after stop: "+stop);
+}
+
 Console.WriteLine($"PASS {checks} host lifecycle checks (real Plugin + thread-enforcing service doubles).");
 
 sealed class Host
@@ -256,6 +291,7 @@ sealed class Host
     public int ChatMessages;
     public List<string> ChatTexts = [];
     public bool Dead;
+    public bool DutyStarted;
     public IFramework Framework { get; }
     public Host() => Framework = Stub<IFramework>("framework");
     public Plugin Load() => new(Stub<IDalamudPluginInterface>("pi"), Stub<IClientState>("client"),
@@ -322,6 +358,7 @@ sealed class Host
             case "IsValid": ValidityReads++; return true;
             case "get_EntityId": return 123u;
             case "get_IsDead": return Dead;
+            case "get_IsDutyStarted": return DutyStarted;
             case "get_PlayerObjects": PlayerEnumerations++; return Array.Empty<Dalamud.Game.ClientState.Objects.Types.IBattleChara>();
             case "get_ClassJob": return new RowRef<ClassJob>(null!, Job, null);
             case "Error": Interlocked.Increment(ref Errors); return null;

@@ -92,6 +92,20 @@ internal static class Program
         var old = record with { Summary = record.Summary with { Id = Guid.NewGuid(), Started = now.AddDays(-366) } }; store.Save(owner, old);
         Check(store.Page(owner, 0).Count == 60, "Expiry pruning on save");
 
+        var damagedRoot=Path.Combine(root,"damaged-schema");var damaged=new HistoryStore(damagedRoot);
+        damaged.Save(owner,record);
+        var damagedDir=Path.Combine(damagedRoot,owner);
+        File.WriteAllText(Path.Combine(damagedDir,"99990101-empty.summary.json"),"{}");
+        File.WriteAllText(Path.Combine(damagedDir,"99990101-null.summary.json"),"null");
+        File.WriteAllText(Path.Combine(damagedDir,"99990101-fields.summary.json"),System.Text.Json.JsonSerializer.Serialize(record.Summary with {Id=Guid.NewGuid(),Arena=null!}));
+        var validPage=new HistoryStore(damagedRoot).Page(owner,0);
+        Check(validPage.Rows.Length==1 && validPage.Rows[0].Id==record.Summary.Id,"malformed but valid JSON summaries do not appear in the history");
+        var bodyFile=Directory.GetFiles(damagedRoot,"*.match.json",SearchOption.AllDirectories).Single();
+        File.WriteAllText(bodyFile,System.Text.Json.JsonSerializer.Serialize(record with {Events=null!}));
+        var invalidDetail=false;
+        try{damaged.Detail(owner,record.Summary);}catch(InvalidDataException){invalidDetail=true;}
+        Check(invalidDetail,"missing event array produces a controlled invalid-history error");
+
         var dailyRoot=Path.Combine(root,"daily");var daily=new HistoryStore(dailyRoot);
         var midnight=new DateTimeOffset(now.Year,now.Month,now.Day,0,0,0,TimeSpan.Zero);
         var beforeMidnight=record with {Summary=record.Summary with {Id=Guid.NewGuid(),Started=midnight.AddSeconds(-1),Ended=midnight.AddMinutes(5)}};
