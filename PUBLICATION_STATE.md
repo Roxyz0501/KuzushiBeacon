@@ -1,3 +1,13 @@
+## 2026-10-26 — PvP Supporter 1.1.0.9 whole-plugin audit
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.9
+- Source/tag: 66cb270bfd8164f68fb14e483ad08a431a2441e3.
+- ZIP: 206,481 bytes; SHA256 0630FAB28C273FA94E59FA47A9175F43BEF179499388CFEEBE900772DCD06003. Anonymous redownload equals local ZIP and current Release DLL; eight allowed entries, version and internal identity verified. Repository HTTP 200, icon image/png.
+- Shared index commit: d6a53de62651f76bbb5c6d719883c9733e227036. Commit-pinned connector and ordinary anonymous main URL both verified at 1.1.0.9; thirteen other entries unchanged (fourteen total).
+- Fixed loss of an already collected review segment when recording or the plugin is disabled; finalize once and stop. Invalid required history fields are skipped, and malformed detail data produces a controlled read error. Stop/job changes/PvP exit now remove the LB request observer and clear its diagnostic state.
+- Regression failures reproduced before fixes. Final checks: 394 managed, 90 host, 2,791 Ledger and 487 headless production UI frames; Release build zero warnings/errors. See VALIDATION.md for exact scope and limits.
+- Automatic Purify remains disabled. No custom packets or automatic game actions added. In-game native/server behavior, live rendering and performance remain unverified; installed DLL and production histories untouched.
+
 ## 2026-10-25 — PvP Supporter 1.1.0.8
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.8
