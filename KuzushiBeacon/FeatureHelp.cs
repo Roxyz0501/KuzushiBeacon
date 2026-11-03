@@ -80,7 +80,7 @@ public static class FeatureHelp
         [94]=("試合メモと射程などの設定値を試合記録に添付します。ローカル記録が必要です。","Attaches a note and selected settings to saved match summaries; requires local recording."),
         [95]=("保存済み集計の最新20試合を匿名JSONとして書き出します。出力ファイルは最新20個まで保持します。","Exports the latest 20 saved summaries as anonymous JSON, retaining up to 20 export files."),
         [96]=("無効な機能で不要な情報収集を省きます。オフでもPvP外の監視は開始しません。","Skips data unnecessary for enabled features; disabling it does not start monitoring outside PvP."),
-        [97]=("支援の走査対象数・頭上ラベル数・一般範囲計算時間に上限を設けます。途中までの結果は部分集計と表示します。","Caps support actors, overhead labels and general-area processing time, marking truncated analysis as partial."),
+        [97]=("支援の走査対象数・頭上ラベル数・一般範囲計算時間に上限を設けます。途中までの結果は部分集計と表示します。","Caps support actors, overhead labels and general-area processing time, marking truncated analysis as partial. Zantetsuken counts and recommendations are not truncated by the actor budget."),
         [98]=("最後の更新から指定秒数を過ぎた支援表示を隠します。侍の旧表示は別の期限判定です。","Hides support displays after the configured snapshot age. Legacy Samurai highlights use their own expiry checks."),
         [99]=("対象選択の計算だけを行い、ターゲット変更やアクション要求を止めます。","Evaluates targeting without changing targets or requesting actions."),
         [100]=("情報収集・範囲計算など処理別の時間と回数、頭上ラベルの描画数を設定画面に表示します。","Displays timing and calls by processing stage plus overhead-label counts in settings."),

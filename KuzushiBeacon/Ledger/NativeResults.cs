@@ -65,9 +65,15 @@ internal sealed unsafe class NativeResults : IDisposable
             cc = interop.HookFromSignature<CcEnd>(CcSignature, OnCc);
             fl = interop.HookFromSignature<End>(FlSignature, OnFl);
             rw = interop.HookFromSignature<End>(RwSignature, OnRw);
-            cc.Enable(); fl.Enable(); rw.Enable(); Available = true; Status = "NativeReady";
+            Available = true; Status = "NativeReady";
         }
         catch { Dispose(); log.Warning("PvP Ledger result hooks unavailable; recording observed events only."); }
+    }
+    public void SetActive(bool active)
+    {
+        if(!Available)return;
+        if(active){cc!.Enable();fl!.Enable();rw!.Enable();}
+        else {cc!.Disable();fl!.Disable();rw!.Disable();}
     }
     private void Read(nint packet, Mode mode)
     {

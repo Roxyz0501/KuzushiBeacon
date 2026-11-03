@@ -14,6 +14,100 @@ void Check(bool result, string description)
     checks++;
 }
 
+// Idle workload audit: no actor scan for self-only displays; global notification switch stops work.
+foreach(var feature in new[]{18})
+{
+    var host=new Host {Pvp=true};
+    host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
+    host.Config.Support.Features=[feature,96];
+    using var plugin=host.Load();host.Raise("framework:Update",host.Framework);
+    Check(host.PlayerEnumerations==0,"self-only feature does not enumerate nearby actors: "+feature);
+    Check(host.Errors==0,"self-only feature remains functional: "+feature);
+}
+foreach(var feature in new[]{24,33,35,39,40,46,47,48,57,58,59,63,65,68})
+{
+    var host=new Host {Pvp=true};host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
+    host.Config.Support.Features=[feature,96];host.Config.Support.Notifications=false;
+    using var plugin=host.Load();
+    for(int i=0;i<600;i++)host.Raise("framework:Update",host.Framework);
+    Check(host.Count("framework:Update")==0&&host.Count("ui:Draw")==0&&host.ObjectReads==0,
+        "muted notification feature has zero monitoring, draw callbacks and object reads: "+feature);
+}
+
+{
+    var host=new Host {Pvp=true};host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
+    host.Config.Support.Features=[18,96];using var plugin=host.Load();
+    host.Raise("framework:Update",host.Framework);
+    typeof(Plugin).GetField("nextSupport",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,double.MaxValue);
+    var reads=host.ObjectReads;for(int i=0;i<600;i++)host.Raise("framework:Update",host.Framework);
+    Check(host.ObjectReads==reads&&host.PlayerEnumerations==0,"600 frames between support samples cause no player or actor reads");
+}
+foreach(var kind in new[]{"count","recommendation","kuzushi"})
+{
+    var host=new Host {Pvp=true};host.Config.ShowLine=host.Config.ShowMarker=kind=="kuzushi";host.Config.ShowMaxCount=kind=="count";
+    host.Config.Support.Features=kind=="recommendation"?[41,96]:[96];host.Config.Support.KuzushiFullLbOnly=true;
+    using var plugin=host.Load();host.Raise("framework:Update",host.Framework);
+    Check(host.PlayerEnumerations==0&&host.Errors==0,"LB-gated display skips actors below full LB: "+kind);
+    host.FullLb=true;
+    typeof(Plugin).GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    host.Raise("framework:Update",host.Framework);
+    Check(host.PlayerEnumerations==1&&host.Errors==0,"LB-gated display resumes when gauge fills: "+kind);
+}
+{
+    var host=new Host {Pvp=true};host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
+    host.Config.Support.Features=[92,96];using var plugin=host.Load();
+    Check(host.Count("framework:Update")==1&&host.Count("ui:Draw")==0,"record-only feature does not install any drawing callback");
+    host.Raise("framework:Update",host.Framework);Check(host.PlayerEnumerations==1,"record-only feature retains required actor snapshot");
+    host.Config.Support.Features=[56,96];host.Config.Support.FocusHud=host.Config.Support.FocusOverhead=false;
+    typeof(Plugin).GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    Check(host.Count("framework:Update")==0&&host.Count("ui:Draw")==0,"all output styles disabled stops the feature");
+}
+foreach(var pvp in new[]{false,true})
+{
+    var host=new Host {Pvp=pvp};host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
+    host.Config.Support.Features=[];host.Config.Support.LedgerEnabled=true;
+    using var plugin=host.Load();host.Raise("framework:Update",host.Framework);
+    Check(host.Errors==0&&host.Count("ui:Draw")==0&&host.Count("framework:Update")==0,
+        "idle Ledger has no update or draw callbacks, even in PvP before duty: "+pvp);
+    host.Config.Support.LedgerEnabled=false;
+    typeof(Plugin).GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    Check(host.Count("chat:LogMessage")==0,"disabling Ledger detaches chat handler");
+}
+
+{
+    var host=new Host {Pvp=true};host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
+    host.Config.Support.Features=[];host.Config.Support.LedgerEnabled=true;
+    using var plugin=host.Load();
+    var module=typeof(Plugin).GetField("ledger",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
+    var mt=module.GetType();void Set(string key,object? value)=>mt.GetField(key,BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(module,value);
+    void Call(string method,params object[] args)=>mt.GetMethod(method,BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(module,args);
+    Check(mt.GetField("fonts",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(module)==null,"idle Ledger does not build overlay fonts");
+    Set("owner",KuzushiBeacon.Ledger.HistoryStore.OwnerKey(123));
+    var session=new KuzushiBeacon.Ledger.MatchSession(DateTimeOffset.UtcNow,KuzushiBeacon.Ledger.Mode.CrystallineConflict,"test","test",KuzushiBeacon.Ledger.HistoryStore.OwnerKey(123),123,1,false);
+    Set("current",session);Call("StartTicks");Call("ReconcileDraw");
+    Check(host.Count("ui:Draw")==1,"active recorded match enables Ledger drawing");
+    host.Config.Ledger.OverlayEnabled=false;Call("ChangeConfig");
+    Check(host.Count("ui:Draw")==0,"overlay off detaches drawing while recording remains active");
+    host.Config.Ledger.OverlayEnabled=true;Call("ChangeConfig");
+    Check(host.Count("ui:Draw")==1,"overlay on restores recorded-match drawing");
+    host.Pvp=false;host.Raise("client:LeavePvP");Call("FlushJobs");
+    host.Raise("framework:Update",host.Framework);
+    Check(host.Count("ui:Draw")==0&&host.Count("framework:Update")==0,"PvP exit drains record and stops Ledger ticks and draw");
+    Check(Directory.EnumerateFiles(host.ConfigDirectory,"*.summary.json",SearchOption.AllDirectories).Count()==1,"idle optimization preserves final match save");
+    Set("preview",true);mt.GetMethod("SetVisible")!.Invoke(module,[true]);host.Raise("framework:Update",host.Framework);
+    Check(host.Count("ui:Draw")==1,"explicit preview still works outside PvP");
+    mt.GetMethod("SetVisible")!.Invoke(module,[false]);mt.GetMethod("SetVisible")!.Invoke(module,[true]);
+    Check(host.Count("ui:Draw")==1,"embedded settings visibility reset does not detach preview each frame");
+    mt.GetMethod("SetVisible")!.Invoke(module,[false]);host.Raise("framework:Update",host.Framework);
+    Check(host.Count("ui:Draw")==0&&host.Count("framework:Update")==0,"closing preview stops idle callbacks");
+}
+
+{
+    var host=new Host {Pvp=true};host.Config.ShowMaxCount=false;host.Config.Support.Features=[18,96];
+    using var plugin=host.Load();host.Raise("framework:Update",host.Framework);
+    Check(host.GaugeReads==0,"own Kuzushi highlights and range ring do not read LB when no LB-dependent feature is enabled");
+}
+
 // Invoke the REAL plugin constructor on an installer-like worker thread.
 foreach (var pvp in new[] { false, true })
 {
@@ -294,9 +388,16 @@ sealed class Host
     public bool DutyStarted;
     public IFramework Framework { get; }
     public Host() => Framework = Stub<IFramework>("framework");
-    public Plugin Load() => new(Stub<IDalamudPluginInterface>("pi"), Stub<IClientState>("client"),
+    public Plugin Load()
+    {
+        var plugin=new Plugin(Stub<IDalamudPluginInterface>("pi"), Stub<IClientState>("client"),
         Stub<IObjectTable>("objects"), Framework, Stub<IGameGui>("gui"),
         Stub<ICommandManager>("commands"), Stub<IPluginLog>("log"), Stub<ITargetManager>("targets"), Stub<IChatGui>("chat"), Stub<IPlayerState>("playerState"), Stub<IDutyState>("duty"), Stub<IDataManager>("data"), Stub<IGameInteropProvider>("interop"));
+        typeof(Plugin).GetField("readFullLb",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,(Func<bool>)(()=>{GaugeReads++;return FullLb;}));
+        return plugin;
+    }
+    public bool FullLb;
+    public int GaugeReads;
     // Monitoring counts exclude the cheap 60-second settings scheduler; disposal still counts all callbacks.
     public int Count(string key) => events.TryGetValue(key, out var list) ? list.Count(d=>d.Method.Name!="PersistenceUpdate") : 0;
     public int TotalSubscriptions => events.Values.Sum(x => x.Count);
@@ -342,6 +443,8 @@ sealed class Host
             case "get_ClientLanguage": return ClientLanguage.Japanese;
             case "get_IsLoggedIn": return true;
             case "get_IsPvPExcludingDen": return Pvp;
+            case "get_FontAtlas": return Stub(method.ReturnType,"fontAtlas");
+            case "NewDelegateFontHandle": return Stub(method.ReturnType,"fontHandle");
             case "get_UiBuilder": return ui ??= Stub(method.ReturnType, "ui");
             case "get_IsInFrameworkUpdateThread": return Environment.CurrentManagedThreadId == mainThread;
             case "RunOnFrameworkThread":

@@ -118,13 +118,28 @@ public sealed class SupportOptions
         {set!.Clear();if(enabled)set.UnionWith(FeatureCatalog.All.Where(f=>f.Id!=99).Select(f=>f.Id));}
         if(enabled)DisabledGroups.Clear();
     }
-    public bool NeedsSelfStatuses => !On(96) || new[]{37,38,51,53,54,55,60}.Any(id=>On(id));
-    public bool NeedsEnemyStatuses(bool legacy) => legacy || !On(96) || Enumerable.Range(31,6).Any(id=>On(id))
-        || new[]{38,40,41,45,88,89}.Any(id=>On(id))
-        || (ExcludeGuard||ExcludeInvulnerable)&&(Enumerable.Range(20,5).Any(id=>On(id))||On(29));
-    public bool NeedsOtherActors(bool legacy) => legacy || !On(96)
-        || Enumerable.Range(16,30).Any(id=>id is not (25 or 26 or 30 or 37 or 39 or 42 or 43 or 44)&&On(id))
-        || Enumerable.Range(56,20).Any(id=>On(id)) || On(83) || On(88) || On(89) || On(92);
+    private static readonly HashSet<int> NotificationFeatures = [24,33,35,39,40,46,47,48,57,58,59,63,65,68];
+    // Saved switches remain intact when a parent or all output styles are off.
+    public bool WorkEnabled(int id) => On(id)
+        && (!NotificationFeatures.Contains(id) || Notifications && !DisabledGroups.Contains(5))
+        && (id != 41 || BestMarker || BestLine)
+        && (id != 56 || FocusHud || FocusOverhead)
+        && (id != 93 || WorkEnabled(46));
+    private bool AnyWork(params ReadOnlySpan<int> ids) { foreach(var id in ids)if(WorkEnabled(id))return true;return false; }
+    public bool NeedsSelfStatuses => !On(96) || AnyWork(37,38,51,53,54,55,60);
+    private bool NeedsKuzushiActors(bool full) => AnyWork(33,35,38)
+        || KuzushiVisible(full)&&AnyWork(31,36) || full&&AnyWork(40,41,88,89);
+    public bool NeedsEnemyStatuses(bool legacy,bool full=true) => legacy || !On(96) || NeedsKuzushiActors(full)
+        || (ExcludeGuard||ExcludeInvulnerable) && (NeedsAreaComparison||AnyWork(20,21,29));
+    public bool NeedsOtherActors(bool legacy,bool full=true) => legacy || !On(96) || NeedsKuzushiActors(full)
+        || AnyWork(16,17,19,20,21,22,23,24,27,28,29,
+            56,57,58,59,61,62,63,64,65,66,67,68,69,71,73,74,75,83,92);
+    public bool NeedsAreaComparison => AnyWork(22,23,24);
+    public bool NeedsLb => AnyWork(39,40,41,87,88,89);
+    public bool HasVisualFeatures(bool full) => FeatureCatalog.All.Any(f => f.Id is >=16 and <=75
+        && f.Id is not (25 or 26 or 30 or 32 or 43 or 60) && !NotificationFeatures.Contains(f.Id)
+        && (f.Id != 41 || full) && (f.Id is not (31 or 36) || KuzushiVisible(full)) && WorkEnabled(f.Id)) || WorkEnabled(83);
+    public bool NeedsOverlay => HasVisualFeatures(true) || NotificationFeatures.Any(WorkEnabled);
     public int SnapshotInterval(bool legacy,int legacyInterval) => legacy?Math.Min(UpdateMs,legacyInterval):UpdateMs;
     public bool On(int id, bool? large = null)
     {
@@ -138,8 +153,7 @@ public sealed class SupportOptions
         var set = id == 77 ? Features : ActiveFeatures(large);
         return set.Contains(id);
     }
-    public bool NeedsMonitor => FeatureCatalog.All.Any(f => f.Id is >=16 and <=75 && f.Id is not (25 or 26 or 30 or 42 or 43 or 70 or 72) && On(f.Id))
-        || On(83)||On(87)||On(88)||On(89)||On(92)||On(93)||On(100);
+    public bool NeedsMonitor => NeedsOverlay || AnyWork(60,87,88,89,92,93);
     public static float JobRange(uint job, float melee, float ranged)
         => job is 1 or 2 or 3 or 4 or 19 or 20 or 21 or 22 or 29 or 30 or 32 or 34 or 37 or 39 or 41 ? melee : ranged;
     public static float CommandRange(uint job,float requested,bool ally=false) => Math.Min(requested,ally?20:JobRange(job,3,20));

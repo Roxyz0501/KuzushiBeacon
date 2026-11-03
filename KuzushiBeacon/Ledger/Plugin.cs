@@ -22,7 +22,7 @@ internal sealed partial class LedgerModule : IDisposable
     private readonly IPluginLog log;
     private readonly Configuration config;
     private readonly System.Action save;
-    private LocalizedFonts fonts;
+    private LocalizedFonts? fonts;
     private readonly HistoryStore store;
     private readonly Webhook webhook = new();
     private readonly NativeResults native;
@@ -36,7 +36,7 @@ internal sealed partial class LedgerModule : IDisposable
     private MatchRecord? lastMatch;
     private readonly List<SaveJob> failed = [];
     private string owner = "", status = "", exportPath = "", webhookDraft = "";
-    private bool open, preview, disposed, ticking;
+    private bool open, preview, disposed, ticking, drawing;
     private volatile bool allowDiscord;
     private DateTimeOffset nextTick, endDue;
     private readonly List<Task> auxiliary=[];
@@ -68,13 +68,11 @@ internal sealed partial class LedgerModule : IDisposable
         allowDiscord = config.DiscordEnabled;
         var language = Loc.Resolve(config.Language, client.ClientLanguage, pi.UiLanguage);
         if (config.Language != language) { config.Language = language; save(); }
-        fonts = new(pi.UiBuilder.FontAtlas, []);
         store = new(Path.Combine(pi.GetPluginConfigDirectory(), "ledger-matches-v1"));
         native = new(interop, () => current, (id, result) => { if (resultQueue.Count < 16) resultQueue.Enqueue((id, result)); }, log);
         command = new((_, _) => Open()) { HelpMessage = T("CommandHelp") };
         
         worker = Task.Run(Worker);
-        pi.UiBuilder.Draw += Draw;
         client.EnterPvP += StartTicks; client.LeavePvP += OnLeft; chat.LogMessage += OnLog;
         duty.DutyStarted += OnStart; duty.DutyRecommenced += OnRecommence; duty.DutyCompleted += OnEnd;
         client.TerritoryChanged += OnTerritory; client.Login += OnLogin; client.Logout += OnLogout;
@@ -84,7 +82,7 @@ internal sealed partial class LedgerModule : IDisposable
     private void Open() { open = true; StartTicks(); if (historyRevision != store.Revision) LoadHistory(); }
     public void SetVisible(bool visible) { open=visible; if(visible)StartTicks(); }
     private void StartTicks() { if(disposed||ticking)return;framework.Update+=Update;ticking=true; }
-    private void OnLeft() { DrainResults(); Finish(current?.Ended==null); lastMatch=null; }
+    private void OnLeft() { DrainResults(); Finish(current?.Ended==null); lastMatch=null; ReconcileDraw(); }
     private void QueueCompletion(System.Action action)
     {
         if(!disposed)completions.Enqueue(action);
@@ -132,8 +130,9 @@ internal sealed partial class LedgerModule : IDisposable
             owner = HistoryStore.OwnerKey(player.ContentId);
             StartTicks();
             current = new(DateTimeOffset.UtcNow, mode.Value, cfc.Name.ExtractText(), player.CharacterName, owner, player.ContentId, client.TerritoryType, partial);
+            native.SetActive(true);
             lastMatch = null; lastGauge = lastKills = -1; finishedTerritory = 0;
-            RefreshFonts([current.Arena]);
+            RefreshFonts([current.Arena]);ReconcileDraw();
         }
         catch { status = "StartFailed"; }
     }
@@ -152,6 +151,7 @@ internal sealed partial class LedgerModule : IDisposable
         var record = current.Snapshot(DateTimeOffset.UtcNow, interrupted);
         var job = new SaveJob(current.Owner, record, config.DiscordEnabled && record.Summary.Official,
             config.ProtectedWebhook, config.Language!, config.DiscordIncludeName);
+        native.SetActive(false);
         finishedTerritory = current.Territory; current = null; lastMatch = record;
         StartTicks();
         Interlocked.Increment(ref pendingJobs);
@@ -189,11 +189,20 @@ internal sealed partial class LedgerModule : IDisposable
         // Worker never waits on framework callbacks; shutdown can safely join it.
         SpinWait.SpinUntil(()=>Volatile.Read(ref pendingJobs)==0);
     }
+    private void ReconcileDraw()
+    {
+        var needed=!disposed&&config.OverlayEnabled&&owner.Length>0
+            &&(client.IsPvPExcludingDen&&(current!=null||lastMatch!=null)||preview&&open);
+        if(needed==drawing)return;
+        if(needed)pi.UiBuilder.Draw+=Draw;else pi.UiBuilder.Draw-=Draw;
+        drawing=needed;
+    }
     private void Update(IFramework _)
     {
         DrainResults();
         while (completions.TryDequeue(out var complete)) if (!disposed) complete();
-        if(!client.IsPvPExcludingDen&&!open&&current==null&&lastMatch==null&&Volatile.Read(ref pendingJobs)==0&&auxiliary.All(t=>t.IsCompleted)&&completions.IsEmpty)
+        ReconcileDraw();
+        if(!open&&current==null&&lastMatch==null&&Volatile.Read(ref pendingJobs)==0&&auxiliary.All(t=>t.IsCompleted)&&completions.IsEmpty)
         {framework.Update-=Update;ticking=false;return;}
         var now = DateTimeOffset.UtcNow;
         if (now < nextTick) return; nextTick = now.AddMilliseconds(250);
@@ -223,7 +232,7 @@ internal sealed partial class LedgerModule : IDisposable
         if (victim is { IsPlayer: true } && IsLocal(killer)) current.Add(DateTimeOffset.UtcNow, EventKind.Kill, victim.Name.ExtractText());
         else if (IsLocal(victim)) current.Add(DateTimeOffset.UtcNow, EventKind.Death, killer?.Name.ExtractText() ?? "");
     }
-    private void ChangeConfig() { config.Sanitize(); SaveConfig(); }
+    private void ChangeConfig() { config.Sanitize(); ReconcileDraw(); SaveConfig(); }
     private void SaveConfig()
     {
         try { save(); }
@@ -271,6 +280,7 @@ internal sealed partial class LedgerModule : IDisposable
     }
     private void RefreshFonts(IEnumerable<string> extra)
     {
+        if(fonts==null)return;
         var replacement = new LocalizedFonts(pi.UiBuilder.FontAtlas, extra);
         fonts.Dispose(); fonts = replacement;
     }
@@ -278,7 +288,7 @@ internal sealed partial class LedgerModule : IDisposable
     {
         if(disposed)return;
         disposed=true;
-        pi.UiBuilder.Draw -= Draw;
+        pi.UiBuilder.Draw -= Draw; drawing=false;
         framework.Update -= Update; ticking=false; client.EnterPvP-=StartTicks; client.LeavePvP-=OnLeft; chat.LogMessage -= OnLog; duty.DutyStarted -= OnStart;
         duty.DutyRecommenced -= OnRecommence; duty.DutyCompleted -= OnEnd;
         client.TerritoryChanged -= OnTerritory; client.Login -= OnLogin; client.Logout -= OnLogout;
@@ -295,6 +305,6 @@ internal sealed partial class LedgerModule : IDisposable
         lock(failed)
             foreach(var job in failed)
                 try{store.Save(job.Owner,job.Record);}catch{log.Warning("Unsaved match remains unavailable on disk; check storage permissions and capacity.");break;}
-        webhook.Dispose(); cancellation.Dispose(); fonts.Dispose();
+        webhook.Dispose(); cancellation.Dispose(); fonts?.Dispose();
     }
 }

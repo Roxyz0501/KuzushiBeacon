@@ -22,8 +22,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly GameZantetsukenAction zantetsukenAction;
     private readonly List<Actor> countCandidates = new(Tracker.MaxTargets);
     private int maximumCount;
+    private Func<bool> readFullLb = GameZantetsukenAction.IsLimitBreakFull;
     private readonly HashSet<ulong> eligibleHighlights=[];
-    private double countExpiresAt;
+    private double countExpiresAt, nextLegacyUpdate;
     private bool observingRequest;
     private bool previewCount;
     private readonly RequestGate messages = new();
@@ -43,6 +44,8 @@ public sealed partial class Plugin : IDalamudPlugin
     private LocalizedFonts? fonts;
     private bool open;
     private bool subscribed;
+    private bool overlaySubscribed;
+    private bool monitorRequested, supportMonitorRequested, supportOverlayRequested;
     private volatile bool disposed;
     private bool faulted;
     private readonly Persistence.SettingsStore settingsStore;
@@ -200,7 +203,8 @@ public sealed partial class Plugin : IDalamudPlugin
     }
     private bool OwnHighlightsEnabled => !S.DisabledGroups.Contains(2)&&S.KuzushiDisplay&&S.OwnKuzushiDisplay&&(config.ShowLine||config.ShowMarker);
     private bool CountHighlightEnabled => !S.DisabledGroups.Contains(2)&&S.ZantetsukenSupport&&config.ShowMaxCount;
-    private bool MonitoringAllowed() => !disposed && !faulted && config.Enabled && ((OwnHighlightsEnabled||CountHighlightEnabled) || S.NeedsMonitor)
+    private bool LegacyScanRequired(bool full) => OwnHighlightsEnabled&&(!S.KuzushiFullLbOnly||full)||CountHighlightEnabled&&full;
+    private bool MonitoringAllowed() => !disposed && !faulted && config.Enabled && monitorRequested
         && client.IsLoggedIn && client.IsPvPExcludingDen;
 
     private void Reconcile() => _ = ReconcileAsync();
@@ -216,11 +220,18 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 if (disposed) return; // Unloaded before the queued first tick.
                 ReconcileLedger();
+                supportMonitorRequested=S.NeedsMonitor;supportOverlayRequested=S.NeedsOverlay;
+                monitorRequested=OwnHighlightsEnabled||CountHighlightEnabled||supportMonitorRequested;
                 if (!MonitoringAllowed()) { Stop(); return; }
+                var needsDraw=OwnHighlightsEnabled||CountHighlightEnabled||supportOverlayRequested;
+                if(needsDraw!=overlaySubscribed)
+                {
+                    if(needsDraw)pi.UiBuilder.Draw+=DrawOverlay;else pi.UiBuilder.Draw-=DrawOverlay;
+                    overlaySubscribed=needsDraw;
+                }
                 if (subscribed) return;
                 tracker.Clear();
                 framework.Update += Update;
-                pi.UiBuilder.Draw += DrawOverlay;
                 subscribed = true;
             });
         }
@@ -236,13 +247,13 @@ public sealed partial class Plugin : IDalamudPlugin
         if (subscribed)
         {
             framework.Update -= Update;
-            pi.UiBuilder.Draw -= DrawOverlay;
             subscribed = false;
         }
+        if(overlaySubscribed){pi.UiBuilder.Draw-=DrawOverlay;overlaySubscribed=false;}
         ClearSupport();
         tracker.Clear();
         maximumCount = 0;
-        countExpiresAt = 0;
+        countExpiresAt = nextLegacyUpdate = 0;
         countCandidates.Clear();eligibleHighlights.Clear();
         trackedOwner = 0;
     }
@@ -263,7 +274,10 @@ public sealed partial class Plugin : IDalamudPlugin
         try
         {
             if (!MonitoringAllowed()) { Stop(); return; }
-            SupportUpdate(Now);
+            var updateAt=Now;
+            if(!(OwnHighlightsEnabled||CountHighlightEnabled)&&updateAt<nextSupport)return;
+            SupportUpdate(updateAt);
+            if(!(OwnHighlightsEnabled||CountHighlightEnabled))return;
             // LocalPlayer can disappear during zoning. Keep the PvP callback alive
             // so detection resumes without requiring another client-state event.
             var player = objects.LocalPlayer;
@@ -271,28 +285,34 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 tracker.Clear();
                 maximumCount = 0;
-                trackedOwner = 0;
+                trackedOwner = 0;nextLegacyUpdate=0;
                 return;
             }
+            if(updateAt<nextLegacyUpdate)return;
+            nextLegacyUpdate=updateAt+config.ScanIntervalMs/1000d;
+            var full = CountHighlightEnabled||S.KuzushiFullLbOnly ? supportMonitorRequested?fullLb:readFullLb() : false;
+            if(!LegacyScanRequired(full))
+            {tracker.Clear();maximumCount=0;countExpiresAt=0;trackedOwner=0;return;}
             trackedOwner = player.EntityId;
             var previousScan = tracker.ScanCount;
-            var now = Now;
+            var now = Now;nextLegacyUpdate=now+config.ScanIntervalMs/1000d;
             // Reuse one bounded scan for both overlays. Count must not depend on highlight distance.
             tracker.Update(true, now, player.EntityId, player.Position,
-                CountHighlightEnabled ? float.MaxValue : config.MaxDistance, config.ScanIntervalMs,
+                CountHighlightEnabled && full ? float.MaxValue : config.MaxDistance, config.ScanIntervalMs,
                 sharedSnapshot ? new SnapshotWorld(observations,player.EntityId,now-supportAt) : world);
             if (previousScan == tracker.ScanCount) return;
             eligibleHighlights.Clear();
-            foreach(var target in tracker.Targets)
+            if(sharedSnapshot)
             {
-                var eligible=sharedSnapshot
-                    ? observations.Any(o=>o.Actor.ObjectId==target.Actor.ObjectId&&o.Eligible(S.ZantetsukenExcludeGuard,S.ZantetsukenExcludeInvulnerable))
-                    : zantetsukenAction.Included(target.Actor);
-                if(eligible)eligibleHighlights.Add(target.Actor.ObjectId);
+                foreach(var observation in observations)
+                    if(observation.OwnKuzushi>0&&observation.Eligible(S.ZantetsukenExcludeGuard,S.ZantetsukenExcludeInvulnerable))
+                        eligibleHighlights.Add(observation.Actor.ObjectId);
             }
+            else foreach(var target in tracker.Targets)
+                if(zantetsukenAction.Included(target.Actor))eligibleHighlights.Add(target.Actor.ObjectId);
             maximumCount = 0;
             countExpiresAt = 0;
-            if (CountHighlightEnabled && tracker.Targets.Count > 0 && GameZantetsukenAction.IsLimitBreakFull())
+            if (CountHighlightEnabled && tracker.Targets.Count > 0 && full)
             {
                 countCandidates.Clear();
                 countExpiresAt = double.MaxValue;
@@ -320,10 +340,10 @@ public sealed partial class Plugin : IDalamudPlugin
             var now = Now;
             var draw = ImGui.GetBackgroundDrawList();
             if (CountHighlightEnabled && maximumCount > 0
-                && Zantetsuken.ShowCount(GameZantetsukenAction.IsLimitBreakFull(), maximumCount, countExpiresAt, now)
+                && Zantetsuken.ShowCount(readFullLb(), maximumCount, countExpiresAt, now)
                 && Project(player.Position + Vector3.UnitY * config.CountHeight, out var countHead))
                 DrawCount(ImGui.GetForegroundDrawList(), countHead + new Vector2(0, config.CountOffsetY), maximumCount);
-            if(!OwnHighlightsEnabled||!S.KuzushiVisible(!S.KuzushiFullLbOnly||GameZantetsukenAction.IsLimitBreakFull()))return;
+            if(!OwnHighlightsEnabled||!S.KuzushiVisible(!S.KuzushiFullLbOnly||readFullLb()))return;
             var lineColor = ImGui.ColorConvertFloat4ToU32(config.LineColor);
             var markerColor = ImGui.ColorConvertFloat4ToU32(config.MarkerColor);
             Vector2 from = default;
@@ -389,7 +409,7 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         settingsStore.MarkChanged();
         tracker.Clear();
-        nextSupport=0;maximumCount=0;countExpiresAt=0;
+        nextSupport=nextLegacyUpdate=0;maximumCount=0;countExpiresAt=0;
         if(!On(60))preDeath.Clear();
         if(!On(93))lowHpSince=0;
         foreach(var id in alerts.Keys.Where(id=>!On(id)||!NotificationsAllowed).ToArray())alerts.Remove(id);

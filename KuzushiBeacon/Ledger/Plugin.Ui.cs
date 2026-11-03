@@ -10,6 +10,8 @@ internal sealed partial class LedgerModule
     private void Draw()
     {
         if (!open && current == null && lastMatch == null) return;
+        if(!config.OverlayEnabled)return;
+        fonts??=new(pi.UiBuilder.FontAtlas,history.Select(s=>s.Arena).Concat(current!=null?[current.Arena]:lastMatch!=null?[lastMatch.Summary.Arena]:[]));
         using var font = fonts.Push(config.Language);
         if ((client.IsPvPExcludingDen || preview && open) && owner.Length > 0 && Overlay.Draw(config, current, lastMatch, preview && open, DateTimeOffset.UtcNow)) ChangeConfig();
     }

@@ -303,9 +303,10 @@ public sealed partial class Plugin
     }
     private void DrawSupportOverlay()
     {
-        if(!MonitoringAllowed()||!S.NeedsMonitor)return;
+        if(!MonitoringAllowed()||!supportOverlayRequested)return;
         var now=Now;
         PlayAlerts(now);
+        if(!S.HasVisualFeatures(fullLb)&&!alerts.Any(a=>Work(a.Key)&&a.Value.Until>now))return;
         if(supportAt==0||now-supportAt>(On(98)?S.StaleSeconds:2))return;
         var player=objects.LocalPlayer;
         if(player==null||!player.IsValid())return;
@@ -336,9 +337,9 @@ public sealed partial class Plugin
                         (On(17)||On(71))&&distance>(current.Ally?S.AllyRange:range)?bad:good,distance);
                 if(On(19))DrawWorldRing(draw,current.Actor.Position,S.AreaRadius,other);
                 var coverage=currentCoverage;
-                Row(20,coverage.Count.ToString());Row(21,coverage.LowCount.ToString());
-                Row(23,$"{coverage.Count} / {(areaCandidates.Count>0?areaCandidates[0].Count:0)}"+(coveragePartial?" *":""));
-                Row(27,$"{Math.Max(0,-current.HpRate):F0} HP/s");
+                if(On(20))Row(20,coverage.Count.ToString());if(On(21))Row(21,coverage.LowCount.ToString());
+                if(On(23))Row(23,$"{coverage.Count} / {(areaCandidates.Count>0?areaCandidates[0].Count:0)}"+(coveragePartial?" *":""));
+                if(On(27))Row(27,$"{Math.Max(0,-current.HpRate):F0} HP/s");
                 if(On(28)&&current.Healed)LabelAt(current.Actor.Position+Vector3.UnitY*3.5f,L("回復 ↑","Healed ↑"),good);
             }
             if(On(22))foreach(var c in areaCandidates.Take(3))
@@ -377,15 +378,15 @@ public sealed partial class Plugin
                 }
             }
             if(coveragePartial)rows.Add(L("* 処理予算内で調べた候補のみ（全対象の最適値ではありません）","* Partial candidates within the processing budget; not a global optimum"));
-            Row(37,$"{Math.Max(0,chiten-(now-supportAt)):F1}s");if(chiten<=0&&previousOwn>0)Row(38,previousOwn.ToString());
-            Row(44,requestState);
+            if(On(37))Row(37,$"{Math.Max(0,chiten-(now-supportAt)):F1}s");if(chiten<=0&&previousOwn>0)if(On(38))Row(38,previousOwn.ToString());
+            if(On(44))Row(44,requestState);
             if(On(45))rows.Add(L("LB人数は推定：既知の除外状態・対象の射程/遮蔽を確認。周辺全員の遮蔽・着弾は保証しません。","LB coverage is estimated: known exclusions and center range/LoS checked; other victims and impact are not guaranteed."));
-            Row(49,(player.CurrentMp/2000).ToString());Row(50,guardReady?"✓":"—");Row(51,$"{Math.Max(0,guardTime-(now-supportAt)):F1}s");Row(52,purifyReady?"✓":"—");
+            if(On(49))Row(49,(player.CurrentMp/2000).ToString());if(On(50))Row(50,guardReady?"✓":"—");if(On(51))Row(51,$"{Math.Max(0,guardTime-(now-supportAt)):F1}s");if(On(52))Row(52,purifyReady?"✓":"—");
             if(On(53)&&selfControls.Any(c=>c.Purify))rows.Add(L("浄化対象あり !","Purifiable effect !"));
             if(On(54))foreach(var control in selfControls)rows.Add($"{StatusRules.Label(control.Id,config.Language=="ja")}: {Math.Max(0,control.Seconds-(now-supportAt)):F1}s");
-            Row(55,$"{resilience:F1}s");if(S.FocusHud)Row(56,focusEnemies.ToString());
-            if(On(56)&&S.FocusOverhead)LabelAt(player.Position+Vector3.UnitY*S.FocusHeight,string.Format(T("FocusCountText"),focusEnemies),ImGui.ColorConvertFloat4ToU32(S.FocusColor),0,S.FocusSize);Row(61,nearbyAllies.ToString());Row(62,L($"味方 {nearbyAllies} / 敵 {nearbyEnemies}",$"Allies {nearbyAllies} / Enemies {nearbyEnemies}"));
-            Row(64,float.IsPositiveInfinity(nearestAlly)?"—":$"{nearestAlly:F1}m");Row(73,sharedTarget.ToString());
+            if(On(55))Row(55,$"{resilience:F1}s");if(S.FocusHud)if(On(56))Row(56,focusEnemies.ToString());
+            if(On(56)&&S.FocusOverhead)LabelAt(player.Position+Vector3.UnitY*S.FocusHeight,string.Format(T("FocusCountText"),focusEnemies),ImGui.ColorConvertFloat4ToU32(S.FocusColor),0,S.FocusSize);if(On(61))Row(61,nearbyAllies.ToString());if(On(62))Row(62,L($"味方 {nearbyAllies} / 敵 {nearbyEnemies}",$"Allies {nearbyAllies} / Enemies {nearbyEnemies}"));
+            if(On(64))Row(64,float.IsPositiveInfinity(nearestAlly)?"—":$"{nearestAlly:F1}m");if(On(73))Row(73,sharedTarget.ToString());
             if(On(66)&&nearbyAllies>0)DrawDirection(draw,player.Position,allyCenter,good,"+");
             if(On(75)&&retreatDirection!=Vector3.Zero)DrawDirection(draw,player.Position,player.Position+retreatDirection*10,other,"~");
         }

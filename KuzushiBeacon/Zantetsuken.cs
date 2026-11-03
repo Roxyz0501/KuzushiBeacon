@@ -46,23 +46,32 @@ public static class Zantetsuken
     public static (Actor? Target, int Count) FindBest(IReadOnlyList<Actor> candidates, Vector3 origin,
         ulong currentTarget, Func<Actor, bool> canSelect)
     {
-        Actor? best = null;
-        int bestCount = -1;
-        float bestDistance = float.MaxValue;
-        foreach (var center in candidates)
+        // Rank the complete snapshot first. Only ask the client about centers in rank order;
+        // a lower coverage center can never displace a reachable higher coverage center.
+        var ranked = new List<(Actor Actor,int Count,float Distance)>(candidates.Count);
+        foreach(var center in candidates)
         {
-            if (!canSelect(center)) continue;
-            int count = 0;
-            foreach (var other in candidates)
-                if (Vector3.DistanceSquared(center.Position, other.Position) <= Radius * Radius) count++;
-            var distance = Vector3.DistanceSquared(origin, center.Position);
-            bool preferred = best is null || (center.ObjectId == currentTarget && best.Value.ObjectId != currentTarget)
-                || ((center.ObjectId == currentTarget) == (best.Value.ObjectId == currentTarget)
-                    && (distance < bestDistance || (distance == bestDistance && center.EntityId < best.Value.EntityId)));
-            if (count > bestCount || (count == bestCount && preferred))
-            { best = center; bestCount = count; bestDistance = distance; }
+            int count=0;
+            foreach(var other in candidates)if(InArea(center.Position,other.Position))count++;
+            ranked.Add((center,count,Vector3.DistanceSquared(origin,center.Position)));
         }
-        return (best, Math.Max(0, bestCount));
+        ranked.Sort((a,b)=>
+        {
+            var order=b.Count.CompareTo(a.Count);if(order!=0)return order;
+            order=(b.Actor.ObjectId==currentTarget).CompareTo(a.Actor.ObjectId==currentTarget);if(order!=0)return order;
+            order=a.Distance.CompareTo(b.Distance);return order!=0?order:a.Actor.EntityId.CompareTo(b.Actor.EntityId);
+        });
+        foreach(var candidate in ranked)
+            if(canSelect(candidate.Actor))return (candidate.Actor,candidate.Count);
+        return (null,0);
+    }
+
+    // Estimated targeted AoE: horizontal 5m circle, independent +/-5m height bound.
+    // Keep player centers (do not assume PvE enemy hitring rules apply to PvP).
+    public static bool InArea(Vector3 center,Vector3 other)
+    {
+        var delta=other-center;
+        return Finite(delta)&&Math.Abs(delta.Y)<=5&&delta.X*delta.X+delta.Z*delta.Z<=Radius*Radius;
     }
 
     public static bool FullGauge(bool pvp, int current, int barUnits, int bars)

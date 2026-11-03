@@ -128,6 +128,46 @@ cfg.LineWidth = float.NaN; cfg.MarkerSize = 1000; cfg.LineColor = new(float.NaN,
 cfg.ScanIntervalMs = 0; cfg.Sanitize();
 Check(cfg.LineWidth == 1.5f && cfg.MarkerSize == 30 && cfg.LineColor == new Vector4(1,0,1,1)
     && cfg.ScanIntervalMs == 50, "invalid config clamped");
+// A radius is a horizontal circle with an independent height limit, not a 3D sphere.
+{
+    Actor A(int i,float x,float y=0)=>new(i,(uint)(100+i),(ulong)(100+i),new(x,y,0),true,true);
+    var actors=new[]{A(0,-10),A(1,10),A(2,14,4),A(3,6,4),A(4,-11)};
+    var w=new FakeWorld();foreach(var a in actors){w.Actors.Add(a);w.Statuses[a.Index]=(3202,10,3);}
+    var action=new FakeAction();
+    Check(Zantetsuken.Execute(true,10,Vector3.Zero,100,w,action)&&action.Last?.Index==1,
+        "command selects three targets on a slope over two flat targets");
+}
+{
+    Check(Zantetsuken.InArea(Vector3.Zero,new(5,5,0))&&!Zantetsuken.InArea(Vector3.Zero,new(5.001f,0,0))
+        &&!Zantetsuken.InArea(Vector3.Zero,new(0,5.001f,0))&&!Zantetsuken.InArea(Vector3.Zero,new(float.NaN,0,0)),"independent horizontal and vertical boundaries reject out-of-range/invalid positions");
+    var random=new Random(1871);
+    for(int trial=0;trial<300;trial++)
+    {
+        var actors=Enumerable.Range(0,30).Select(i=>new Actor(i,(uint)(i+100),(ulong)(i+100),new(random.Next(-15,16),random.Next(-7,8),random.Next(-15,16)),true,true)).ToArray();
+        ulong current=(ulong)random.Next(100,130);
+        var allowed=actors.Where(a=>random.Next(3)!=0).Select(a=>a.ObjectId).ToHashSet();
+        // Independent exhaustive reference: include every victim, even when that victim cannot be a center.
+        var expected=actors.Where(a=>allowed.Contains(a.ObjectId)).Select(a=>(Actor:a,Count:actors.Count(b=>Math.Abs(a.Position.Y-b.Position.Y)<=5
+            &&Math.Pow(a.Position.X-b.Position.X,2)+Math.Pow(a.Position.Z-b.Position.Z,2)<=25)))
+            .OrderByDescending(a=>a.Count).ThenByDescending(a=>a.Actor.ObjectId==current).ThenBy(a=>a.Actor.Position.LengthSquared()).ThenBy(a=>a.Actor.EntityId).FirstOrDefault();
+        int calls=0;var best=Zantetsuken.FindBest(actors,Vector3.Zero,current,a=>{calls++;return allowed.Contains(a.ObjectId);});
+        var shuffled=Zantetsuken.FindBest(actors.Reverse().ToArray(),Vector3.Zero,current,a=>allowed.Contains(a.ObjectId));
+        Check(best.Target?.ObjectId==expected.Actor.ObjectId&&best.Count==expected.Count&&best==shuffled&&calls<=30,"exhaustive maximum, unreachable victims, ties and enumeration-order independence "+trial);
+    }
+    var cluster=Enumerable.Range(0,72).Select(i=>new Actor(i,(uint)(i+100),(ulong)(i+100),new(i%9,0,i/9),true,true)).ToArray();
+    int reads=0;var result=Zantetsuken.FindBest(cluster,Vector3.Zero,0,_=>{reads++;return true;});
+    Check(reads==1&&result.Count>0,"rank-first selection performs one native eligibility check when best center is reachable");
+    Console.WriteLine($"SELECTION 72 actors: native center checks={reads} (previous implementation: 72)");
+}
+{
+    var o=new SupportOptions{Features=[18,96]};Check(!o.NeedsOtherActors(false)&&!o.NeedsSelfStatuses,"ring is self position only");
+    o.Features=[60,96];Check(!o.NeedsOtherActors(false)&&o.NeedsSelfStatuses&&!o.NeedsOverlay,"pre-death record reads self only and has no overlay");
+    foreach(var id in new[]{20,21}){o.Features=[id,96];Check(!o.NeedsAreaComparison&&o.NeedsOtherActors(false),"current target count skips all-center ranking "+id);}
+    o.Features=[100,96];Check(!o.NeedsMonitor,"metrics alone does not create work to measure");
+    o.Features=[41,96];o.BestMarker=o.BestLine=false;Check(!o.NeedsMonitor,"no recommendation styles means no monitoring");
+    o.BestMarker=true;Check(!o.NeedsOtherActors(false,false)&&o.NeedsOtherActors(false,true),"recommendation reads actors only with full LB");
+    o.Features=[24,96];o.Notifications=false;Check(!o.NeedsAreaComparison&&!o.NeedsMonitor,"global notification disable skips alert geometry");
+}
 // Zantetsuken: maximize a target-centered 5m circle, never use a stale overlay cache.
 {
     var w = new FakeWorld();
@@ -158,7 +198,7 @@ Check(cfg.LineWidth == 1.5f && cfg.MarkerSize == 30 && cfg.LineColor == new Vect
     for (int i = 0; i < 500; i++) Add(A(i, i));
     var reads = w.StatusReads; var evaluations = action.Checks;
     Zantetsuken.Execute(true, 10, Vector3.Zero, 0, w, action);
-    Check(w.StatusReads - reads == 200 && action.Checks - evaluations == 200, "command scan and native availability checks bounded to 200");
+    Check(w.StatusReads - reads == 200 && action.Checks - evaluations is >0 and <=200, "command scan and native availability checks bounded to 200");
 }
 Check(Zantetsuken.FullGauge(true, 10000, 10000, 3), "PvP requires one full personal bar, not all displayed bars");
 Check(Zantetsuken.FullGauge(true, 10000, 10000, 1), "PvP full gauge");
