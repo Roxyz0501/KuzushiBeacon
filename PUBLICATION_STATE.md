@@ -1,3 +1,14 @@
+## 2026-11-04 ? PvP Supporter 1.1.0.10 workload / selection audit
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.10
+- Source/tag: 559c2fdb74e565eecc4d0b57d74afb92eac3d343.
+- ZIP: 208,564 bytes; SHA256 BC5CF04214854B57548AFD67A7481DA69F80206813D357C6EF1C42DD8A50DE89. Anonymous redownload equals the local package/current Release DLL; eight allowed entries and manifest version/internal identity verified. Repository and icon HTTP 200, icon image/png.
+- Shared index commit: 6bd79d9a15e8dc7c411700ae78c859f6c1520465. Commit-pinned connector and ordinary anonymous main URL both verified at 1.1.0.10; fourteen other entries unchanged (fifteen total).
+- Stopped ineffective notification/style-only monitoring, unnecessary self-only actor scans/all-center comparison, between-sample object reads, record-only drawing and idle Ledger callbacks. LB-gated snapshots avoid actors below full gauge. Ledger fonts are lazy and existing result hooks active-session-only. Required settings scheduling and final saves remain.
+- Zantetsuken uses horizontal-circle/independent-height coverage and ranks before native center checks; complete 200-player bounded LB snapshots avoid general-budget truncation. Slope model reproduces old two-vs-three selection; 300 exhaustive/randomized comparisons pass. Exact live incident and PvP server geometry remain unconfirmed; see VALIDATION.md for the source/inference distinction.
+- Final checks: 705 managed, 130 real-host, 2,791 Ledger, 487 UI frames. Release build zero warnings/errors. Synthetic 72-actor reachable-best selection makes one center-eligibility check versus 72 previously; no physical native CPU claim. Outside-PvP/disabled object reads remain zero in tested loops; unchanged persistence writes zero.
+- Automatic Purify remains disabled; no custom packets or automatic actions added. Installed plugin DLL/production histories untouched. Release body follows the current user-facing changes-only policy.
+
 ## 2026-10-26 — PvP Supporter 1.1.0.9 whole-plugin audit
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.9
