@@ -1,3 +1,13 @@
+## 2026-11-04 - PvP Supporter 1.1.0.11 command feedback
+
+- Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.11
+- Source/tag: ad9b82e6a4570c05db37d9e60d6b755f605b9339.
+- ZIP: 217,866 bytes; SHA256 A47BD57FD3CCF2940C5769A33C31AFF433771F1DA0BBDDE2C15ADD77356DB86F. Anonymous public redownload equals the local package/current Release DLL; eight entries, version and internal identity verified. Repository HTTP 200 and icon image/png.
+- Shared index commit: 1db4c7900a557ed223ccbc2547c37ab9a54232e7. Commit-pinned connector verified at 1.1.0.11; fourteen other entries unchanged (fifteen total). Initial anonymous main URL still served cached 1.1.0.10; CDN propagation tracked separately.
+- Selected command target gets a configurable local marker. Confirmed own action-effect receipt produces a configurable fixed 5m ring; mere request/queue acceptance or gauge consumption is insufficient. Default marker 3 seconds / ring 2 seconds. Bounded short-lived observer and callbacks, no idle actor scans. No custom packet sends or automatic Purify added.
+- Final checks: 793 managed, 142 real-host, 2,791 Ledger and 502 headless UI frames; Release build zero warnings/errors. Japanese settings and feedback geometry visually checked. Native receive hook/live server timing and actual in-game rendering remain unverified. See VALIDATION.md.
+- Corrected previous v1.1.0.10 release-body encoding; its tag/ZIP unchanged. Installed DLL and production histories/configuration untouched.
+
 ## 2026-11-04 ? PvP Supporter 1.1.0.10 workload / selection audit
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.10
