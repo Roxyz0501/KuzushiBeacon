@@ -21,6 +21,7 @@ public unsafe class UiStub : DispatchProxy
         {
             case "RunOnFrameworkThread": return Task.CompletedTask;
             case "get_IsLoggedIn": case "get_IsPvPExcludingDen": return Pvp;
+            case "get_Item": return Pvp?Create<Dalamud.Game.ClientState.Objects.Types.IGameObject,UiStub>():null;
             case "get_LocalPlayer": return Pvp?Create<Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter,UiStub>():null;
             case "IsValid": return true;
             case "get_Position": return new System.Numerics.Vector3(0,0,0);

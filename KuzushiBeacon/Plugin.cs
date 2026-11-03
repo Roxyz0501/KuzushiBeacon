@@ -85,6 +85,7 @@ public sealed partial class Plugin : IDalamudPlugin
         historyFiles = new(pi.GetPluginConfigDirectory());
         config.Sanitize();
         zantetsukenAction.Options = config.Support;
+        zantetsukenAction.TargetSelected=CommandTargetSelected;zantetsukenAction.ActionRequested=CommandActionRequested;
         ClientLanguage? game;
         try { game = client.ClientLanguage; } catch { game = null; }
         Loc.CheckCompleteness();
@@ -144,6 +145,8 @@ public sealed partial class Plugin : IDalamudPlugin
                 finally
                 {
                     zantetsukenAction.TargetOnly = false;
+                    if(!commandVisuals.Waiting)confirmationReader?.Disable();
+                    SyncCommandVisualCallbacks();
                     if (zantetsukenAction.Gate.Pending && !observingRequest)
                     { framework.Update += ObserveRequest; observingRequest = true; }
                 }
@@ -243,6 +246,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void Stop()
     {
+        ClearCommandVisuals();
         ResetRequest();
         if (subscribed)
         {
@@ -408,6 +412,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private void MarkDirty()
     {
         settingsStore.MarkChanged();
+        if(!S.CommandMarker)commandVisuals.HideMarker();
+        if(!S.ConfirmedRing){commandVisuals.HideRing();confirmationReader?.Disable();}
+        SyncCommandVisualCallbacks();
         tracker.Clear();
         nextSupport=nextLegacyUpdate=0;maximumCount=0;countExpiresAt=0;
         if(!On(60))preDeath.Clear();
@@ -514,6 +521,7 @@ public sealed partial class Plugin : IDalamudPlugin
         reviewWrite.GetAwaiter().GetResult();
         ResetRequest();
         Stop();
+        confirmationReader?.Dispose();confirmationReader=null;
         duty.DutyStarted -= SupportDutyStarted;
         duty.DutyRecommenced -= SupportDutyStarted;
         duty.DutyCompleted -= SupportDutyEnded;

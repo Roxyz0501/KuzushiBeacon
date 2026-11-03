@@ -14,6 +14,50 @@ void Check(bool result, string description)
     checks++;
 }
 
+// Real plugin feedback lifecycle, with native receipt replaced only by a value-queue injection.
+{
+    var host=new Host{Pvp=true,FeedbackTargetPresent=true};
+    host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;host.Config.Support.Features=[];
+    using var plugin=host.Load();var pt=typeof(Plugin);
+    object? Field(string name)=>pt.GetField(name,BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin);
+    void Call(string name,params object[] args)=>pt.GetMethod(name,BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,args);
+    double Now()=>System.Diagnostics.Stopwatch.GetTimestamp()/(double)System.Diagnostics.Stopwatch.Frequency;
+    var state=(ZantetsukenVisualState)Field("commandVisuals")!;
+    var target=new Actor(37,500,500,new(8,0,0),true,true);
+    Check(host.Count("framework:Update")==0&&host.Count("ui:Draw")==0,"default command visuals do not add idle callbacks");
+    var adapter=Field("zantetsukenAction")!;
+    var selected=(Action<Actor,uint,bool>)adapter.GetType().GetProperty("TargetSelected")!.GetValue(adapter)!;
+    selected(target,123,false);
+    Check(state.Selected==target&&host.Count("ui:Draw")==1&&host.Count("framework:Update")==1,"actual selected-target callback starts temporary feedback independently of other overlays");
+    Check(Field("confirmationReader")==null&&!state.Waiting,"selection-only command does not hook action confirmation");
+    var readerType=pt.Assembly.GetType("KuzushiBeacon.ActionConfirmationReader")!;
+    var reader=Activator.CreateInstance(readerType,Field("interop"),Field("log"))!;
+    pt.GetField("confirmationReader",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,reader);
+    Call("CommandActionRequested",target,123u,(ushort)7);
+    Check(state.Waiting&&state.RingCenter==null,"request acceptance alone has no confirmed ring");
+    void Receive(uint owner,uint action,ulong targetId,ushort sequence)
+    {
+        var effectType=pt.Assembly.GetType("KuzushiBeacon.ActionConfirmation")!;
+        var effect=Activator.CreateInstance(effectType,owner,action,(byte)1,targetId,sequence,Now());
+        var queue=readerType.GetField("received",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(reader)!;
+        queue.GetType().GetMethod("Enqueue")!.Invoke(queue,[effect]);
+        readerType.GetField("queued",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(reader,1);
+        host.Raise("framework:Update",host.Framework);
+    }
+    Receive(999,29537,500,7);Check(state.RingCenter==null&&state.Waiting,"another player's result never displays own confirmation");
+    Receive(123,29537,500,7);
+    Check(state.RingCenter==host.FeedbackTargetPosition&&!state.Waiting,"received own action matches pending target and samples its current position");
+    var expires=state.RingUntil;Receive(123,29537,500,7);Check(state.RingUntil==expires,"duplicate receipt cannot extend visual duration");
+    Check(host.PlayerEnumerations==0,"feedback uses one object slot, never a player-table scan");
+    state.Expire(double.MaxValue);host.Raise("framework:Update",host.Framework);
+    Check(host.Count("ui:Draw")==0&&host.Count("framework:Update")==0,"expiry removes all temporary callbacks");
+    selected(target,123,false);Call("CommandActionRequested",target,123u,(ushort)8);host.FeedbackTargetPresent=false;
+    Receive(123,29537,500,8);Check(state.RingCenter==null&&!state.Waiting,"missing target does not produce a stale-position ring");
+    host.Pvp=false;host.Raise("client:LeavePvP");
+    Check(!state.Visible&&!state.Waiting&&host.Count("ui:Draw")==0&&host.Count("framework:Update")==0,"PvP exit clears feedback immediately");
+    selected(target,123,false);Check(!state.Visible,"outside-PvP selection cannot restart feedback");
+}
+
 // Idle workload audit: no actor scan for self-only displays; global notification switch stops work.
 foreach(var feature in new[]{18})
 {
@@ -385,6 +429,8 @@ sealed class Host
     public int ChatMessages;
     public List<string> ChatTexts = [];
     public bool Dead;
+    public bool FeedbackTargetPresent;
+    public System.Numerics.Vector3 FeedbackTargetPosition=new(9,1,2);
     public bool DutyStarted;
     public IFramework Framework { get; }
     public Host() => Framework = Stub<IFramework>("framework");
@@ -459,7 +505,10 @@ sealed class Host
                 if (ThrowOnRead) throw new InvalidOperationException("Simulated host failure");
                 return PlayerAvailable ? player ??= Stub(method.ReturnType, "player") : null;
             case "IsValid": ValidityReads++; return true;
-            case "get_EntityId": return 123u;
+            case "get_Item": return FeedbackTargetPresent&&(int)args[0]! ==37?Stub(method.ReturnType,"feedbackTarget"):null;
+            case "get_Position": return role=="feedbackTarget"?FeedbackTargetPosition:System.Numerics.Vector3.Zero;
+            case "get_GameObjectId": return role=="feedbackTarget"?500UL:123UL;
+            case "get_EntityId": return role=="feedbackTarget"?500u:123u;
             case "get_IsDead": return Dead;
             case "get_IsDutyStarted": return DutyStarted;
             case "get_PlayerObjects": PlayerEnumerations++; return Array.Empty<Dalamud.Game.ClientState.Objects.Types.IBattleChara>();

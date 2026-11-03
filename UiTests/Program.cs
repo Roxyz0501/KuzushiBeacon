@@ -21,6 +21,8 @@ internal static unsafe class Program
    var glyphs=(string)type.Assembly.GetType("KuzushiBeacon.SupportGlyphs")!.GetField("Text")!.GetRawConstantValue()!;
    glyphs+=(string)type.Assembly.GetType("KuzushiBeacon.HistoryFilesView")!.GetProperty("FontText")!.GetValue(null)!;
    glyphs+=(string)type.Assembly.GetType("KuzushiBeacon.CommandFeedback")!.GetProperty("FontText")!.GetValue(null)!;
+   foreach(var language in Loc.Languages)
+    foreach(var key in new[]{"CommandMarker","CommandMarkerHelp","ConfirmedRing","ConfirmedRingHelp","FeedbackColor","FeedbackSize","FeedbackHeight","FeedbackDuration","FeedbackWidth","CommandRingUnavailable"})glyphs+=Loc.Get(language.Code,key);
    foreach(var f in UiStub.Fonts)foreach(var ch in glyphs.Distinct())
     if(f.FindGlyphNoFallback(ch)==null)throw new Exception("Missing support glyph U+"+((int)ch).ToString("X4"));
    var textures=new Dictionary<ulong,(nint,int,int)>();
@@ -123,6 +125,27 @@ internal static unsafe class Program
    Set("supportAt",System.Diagnostics.Stopwatch.GetTimestamp()/(double)System.Diagnostics.Stopwatch.Frequency);
    for(int i=0;i<2;i++){ImGui.NewFrame();Call("DrawSupportOverlay");ImGui.Render();}
    Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"support-hud-ja.bmp"));
+   var visual=(ZantetsukenVisualState)type.GetField("commandVisuals",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
+   var now=System.Diagnostics.Stopwatch.GetTimestamp()/(double)System.Diagnostics.Stopwatch.Frequency;
+   UiStub.Config.Support.CommandMarker=UiStub.Config.Support.ConfirmedRing=true;
+   visual.Select(new(1,1,1,System.Numerics.Vector3.Zero,true,true),now,10);visual.ShowRing(System.Numerics.Vector3.Zero,now,10);
+   ImGui.NewFrame();Call("DrawCommandVisuals");ImGui.Render();frames++;
+   if(ImGui.GetDrawData().TotalVtxCount==0)throw new Exception("Command marker/ring drawing is empty");
+   Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"command-feedback.bmp"));
+   visual.Clear();
+   foreach(var language in Loc.Languages)
+   {
+    UiStub.Config.Language=language.Code;float hiddenHeight=0;
+    foreach(var enabled in new[]{false,true})
+    {
+     UiStub.Config.Support.CommandMarker=UiStub.Config.Support.ConfirmedRing=enabled;
+     ImGui.NewFrame();ImGui.SetNextWindowPos(new(30,30));ImGui.SetNextWindowSize(new(1100,700));ImGui.Begin("Command feedback settings");
+     ImGui.PushFont(UiStub.Fonts[0]);var before=ImGui.GetCursorPosY();Call("DrawCommandVisualSettings");var height=ImGui.GetCursorPosY()-before;
+     if(!enabled)hiddenHeight=height;else if(height<=hiddenHeight)throw new Exception("Command visual styles not conditional");
+     ImGui.PopFont();ImGui.End();ImGui.Render();frames++;
+     Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,$"command-settings-{language.Code}-{enabled}.bmp"));
+    }
+   }
    UiStub.Pvp=false;
    if(UiStub.Saves!=0)throw new Exception("Unchanged UI must not save");
    Console.WriteLine($"PASS {frames+12} headless production UI frames; 8 categories on/off, all feature tooltips and 10 sidebar pages in Japanese and English; zero unchanged config writes.");

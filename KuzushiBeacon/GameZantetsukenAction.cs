@@ -21,6 +21,8 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
     public SupportOptions? Options { get; set; }
     public bool TargetOnly { get; set; }
     public Actor? LastSelection { get; private set; }
+    public Action<Actor,uint,bool>? TargetSelected { get; set; }
+    public Action<Actor,uint,ushort?>? ActionRequested { get; set; }
     public bool Included(Actor candidate) => Resolve(candidate) is IBattleChara actor
         && !StatusRules.Excluded(actor, Options?.ZantetsukenExcludeGuard == true, Options?.ZantetsukenExcludeInvulnerable == true);
 
@@ -89,7 +91,7 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
         if (actor is null) return Fail("target changed");
         LastSelection = candidate;
         if (Options?.On(99) == true) return true;
-        if (TargetOnly) { targets.Target = actor; return true; }
+        if (TargetOnly) { targets.Target = actor; TargetSelected?.Invoke(candidate,owner,false); return true; }
         // Diagnostic state only: a previous request must never suppress a new explicit press.
         var manager = ActionManager.Instance();
         if (manager == null) return Fail("native unavailable");
@@ -104,12 +106,15 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
         Gate.Reset();
         Gate.Begin(System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency);
         targets.Target = actor;
+        TargetSelected?.Invoke(candidate,owner,true);
         // Same normal execution mode as a hotbar button press; client handles queueing/checks.
         var sequence = manager->LastUsedActionSequence;
         var accepted = manager->UseAction(ActionType.Action, Zantetsuken.ActionId,
             actor.GameObjectId, mode: ActionManager.UseActionMode.None);
         Gate.Result(System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency,
             accepted, OwnActionQueued(manager), sequence, manager->LastUsedActionSequence);
+        if(accepted||OwnActionQueued(manager)||manager->LastUsedActionSequence!=sequence)
+            ActionRequested?.Invoke(candidate,owner,manager->LastUsedActionSequence!=sequence?manager->LastUsedActionSequence:null);
         observationDeadline = now + 3;
         if (accepted || Gate.Pending) return true;
         return Fail(observed.Count > 0 ? string.Join("|", observed) : "action rejected");

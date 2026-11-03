@@ -406,14 +406,16 @@ public sealed partial class Plugin
         }
         supportDraws+=drawn;
     }
-    private void DrawWorldRing(ImDrawListPtr draw,Vector3 center,float radius,uint color)
+    private void DrawWorldRing(ImDrawListPtr draw,Vector3 center,float radius,uint color,float? width=null)
     {
         const int segments=48;
-        for(int i=0;i<segments;i++)
+        Vector2 previous=default;bool previousVisible=false;
+        for(int i=0;i<=segments;i++)
         {
-            var a=i*MathF.Tau/segments;var b=(i+1)*MathF.Tau/segments;
-            if(Project(center+new Vector3(MathF.Cos(a)*radius,.05f,MathF.Sin(a)*radius),out var p)
-                &&Project(center+new Vector3(MathF.Cos(b)*radius,.05f,MathF.Sin(b)*radius),out var q))draw.AddLine(p,q,color,config.LineWidth);
+            var angle=i*MathF.Tau/segments;
+            var visible=Project(center+new Vector3(MathF.Cos(angle)*radius,.05f,MathF.Sin(angle)*radius),out var point);
+            if(visible&&previousVisible)draw.AddLine(previous,point,color,width??config.LineWidth);
+            previous=point;previousVisible=visible;
         }
     }
     private void DrawDirection(ImDrawListPtr draw,Vector3 from,Vector3 to,uint color,string label)

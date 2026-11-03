@@ -80,6 +80,11 @@ public sealed class SupportOptions
     public bool KuzushiDisplay=true, OwnKuzushiDisplay=true, KuzushiFullLbOnly;
     public bool ZantetsukenSupport=true, SamuraiNotifications=true;
     public bool PurifyBeforeZantetsuken = false;
+    public bool CommandMarker=true, ConfirmedRing=true;
+    public float CommandMarkerSize=18, CommandMarkerHeight=4.5f, CommandMarkerSeconds=3;
+    public Vector4 CommandMarkerColor=new(1,.25f,.8f,1);
+    public float ConfirmedRingWidth=2, ConfirmedRingHeight=0, ConfirmedRingSeconds=2;
+    public Vector4 ConfirmedRingColor=new(.2f,1,.8f,.9f);
     public bool FocusOverhead = true, FocusHud = true;
     public float FocusSize = 24, FocusHeight = 3.5f;
     public Vector4 FocusColor = new(1,.3f,.2f,1);
@@ -177,6 +182,10 @@ public sealed class SupportOptions
         FocusCount=Math.Clamp(FocusCount,1,50);NearbyIncrease=Math.Clamp(NearbyIncrease,1,50);Disadvantage=Math.Clamp(Disadvantage,1,50);
         KuzushiTone=Math.Clamp(KuzushiTone,0,2);LbTone=Math.Clamp(LbTone,0,2);DangerTone=Math.Clamp(DangerTone,0,2);
         Vector4 Color(Vector4 c)=>new(F(c.X,0,1,1),F(c.Y,0,1,1),F(c.Z,0,1,1),F(c.W,0,1,1));
+        CommandMarkerSize=F(CommandMarkerSize,5,40,18);CommandMarkerHeight=F(CommandMarkerHeight,0,6,4.5f);
+        CommandMarkerSeconds=F(CommandMarkerSeconds,.25f,10,3);CommandMarkerColor=Color(CommandMarkerColor);
+        ConfirmedRingWidth=F(ConfirmedRingWidth,.5f,8,2);ConfirmedRingHeight=F(ConfirmedRingHeight,0,3,0);
+        ConfirmedRingSeconds=F(ConfirmedRingSeconds,.25f,10,2);ConfirmedRingColor=Color(ConfirmedRingColor);
         FocusSize=F(FocusSize,12,96,24);FocusHeight=F(FocusHeight,0,6,3.5f);FocusColor=Color(FocusColor);
         TimerSize=F(TimerSize,12,96,18);TimerHeight=F(TimerHeight,0,6,3);
         BestMarkerSize=F(BestMarkerSize,5,30,14);BestMarkerHeight=F(BestMarkerHeight,0,6,4);

@@ -140,6 +140,7 @@ public sealed partial class Plugin
                 }
                 ImGui.Unindent();
             }
+            changed|=DrawCommandVisualSettings();
             changed|=DrawFeatureToggle(FeatureCatalog.ById[43]);
             changed|=DrawFeatureToggle(FeatureCatalog.ById[44]);
             changed|=DrawFeatureToggle(FeatureCatalog.ById[45]);
@@ -167,6 +168,34 @@ public sealed partial class Plugin
         if(ImGui.CollapsingHeader(L("地天の状態表示","Chiten state displays")))
         {changed|=DrawFeatureToggle(FeatureCatalog.ById[37]);changed|=DrawFeatureToggle(FeatureCatalog.ById[38]);}
         if(changed){config.Sanitize();MarkDirty();}
+    }
+    private bool DrawCommandVisualSettings()
+    {
+        bool changed=false;
+            changed|=ImGui.Checkbox(Label("CommandMarker"),ref S.CommandMarker);
+            HoverHelp(T("CommandMarkerHelp"));
+            if(S.CommandMarker)
+            {
+                ImGui.PushID("CommandMarkerStyle");ImGui.Indent();
+                changed|=PickColor(Label("FeedbackColor"),ref S.CommandMarkerColor);
+                changed|=ImGui.SliderFloat(Label("FeedbackSize"),ref S.CommandMarkerSize,5,40,"%.0f px");
+                changed|=ImGui.SliderFloat(Label("FeedbackHeight"),ref S.CommandMarkerHeight,0,6,"%.1f m");
+                changed|=ImGui.SliderFloat(Label("FeedbackDuration"),ref S.CommandMarkerSeconds,.25f,10,"%.2f s");
+                ImGui.Unindent();ImGui.PopID();
+            }
+            changed|=ImGui.Checkbox(Label("ConfirmedRing"),ref S.ConfirmedRing);
+            HoverHelp(T("ConfirmedRingHelp"));
+            if(S.ConfirmedRing)
+            {
+                ImGui.PushID("ConfirmedRingStyle");ImGui.Indent();
+                changed|=PickColor(Label("FeedbackColor"),ref S.ConfirmedRingColor);
+                changed|=ImGui.SliderFloat(Label("FeedbackWidth"),ref S.ConfirmedRingWidth,.5f,8,"%.1f px");
+                changed|=ImGui.SliderFloat(Label("FeedbackHeight"),ref S.ConfirmedRingHeight,0,3,"%.1f m");
+                changed|=ImGui.SliderFloat(Label("FeedbackDuration"),ref S.ConfirmedRingSeconds,.25f,10,"%.2f s");
+                if(confirmationReader?.Unavailable==true)ImGui.TextWrapped(T("CommandRingUnavailable"));
+                ImGui.Unindent();ImGui.PopID();
+            }
+        return changed;
     }
     private bool ToggleFeature(int id,string title)
     {

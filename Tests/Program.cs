@@ -11,6 +11,36 @@ void Check(bool result, string name)
     checks++;
 }
 
+// Command feedback waits for the matching received action, never for a gauge/acceptance guess.
+{
+    var a=new Actor(1,100,100,new(1,0,0),true,true);var b=new Actor(2,101,101,new(9,0,0),true,true);
+    var v=new ZantetsukenVisualState();v.Select(a,0,3);v.Request(10,a,7,0);
+    Check(v.Selected==a&&v.RingCenter==null&&v.Waiting,"selection shows marker without confirming ring");
+    Check(v.Confirm(11,29537,1,100,7,.1)==null&&v.Confirm(10,1,1,100,7,.1)==null
+        &&v.Confirm(10,29537,2,100,7,.1)==null&&v.Confirm(10,29537,1,101,7,.1)==null
+        &&v.Confirm(10,29537,1,100,8,.1)==null&&v.Waiting,"other source/action/type/target/sequence cannot confirm");
+    v.Select(b,.2,3);v.Request(10,b,8,.2);
+    Check(v.Confirm(10,29537,1,100,7,.3)==a&&v.Selected==b,"delayed first confirmation keeps its actual target after another selection");
+    v.ShowRing(new(2,1,0),.3,2);Check(v.RingCenter==new Vector3(2,1,0)&&!v.Waiting,"confirmed ring uses sampled confirmation position");
+    Check(v.Confirm(10,29537,1,100,7,.4)==null&&v.RingUntil==2.3,"duplicate effect cannot restart ring");
+    v.Expire(2.3);Check(v.RingCenter==null&&v.Selected==b,"ring and marker expire independently");
+    v.Expire(3.2);Check(!v.Visible&&!v.Waiting,"feedback expires completely");
+    v.Request(10,a,null,10);Check(v.Confirm(10,29537,1,100,24,9.9)==null,"late old result before request is ignored");
+    Check(v.Confirm(10,29537,1,100,24,10.01)==a,"queued action can match later assigned source sequence");
+    v.Request(10,a,65535,20);Check(v.Confirm(10,29537,1,100,65535,23)==null,"confirmation deadline is exclusive");
+    v.Expire(23);Check(!v.Waiting,"unconfirmed requests time out without ring");
+    for(int n=0;n<100;n++)v.Request(10,a,(ushort)n,30+n*.001);
+    Check(v.PendingCount==16,"pending command feedback is bounded under repeated presses");
+    v.HideRing();Check(!v.Waiting&&v.RingCenter==null,"ring off cancels confirmation work");
+    v.Select(a,40,0);Check(!v.Visible,"marker off has no visible state");
+    v.ShowRing(new(float.NaN,0,0),40,2);Check(v.RingCenter==null,"invalid position never draws a ring");
+    v.Request(10,a,0,40);v.Clear();Check(!v.Waiting&&!v.Visible,"lifecycle clear removes all feedback");
+    var settings=new SupportOptions{CommandMarkerSize=float.NaN,CommandMarkerSeconds=100,ConfirmedRingWidth=-5,ConfirmedRingSeconds=float.NaN};settings.Sanitize();
+    Check(settings.CommandMarkerSize==18&&settings.CommandMarkerSeconds==10&&settings.ConfirmedRingWidth==.5f&&settings.ConfirmedRingSeconds==2,"visual style values are bounded");
+    var saved=JsonConvert.DeserializeObject<SupportOptions>(JsonConvert.SerializeObject(settings))!;
+    Check(saved.CommandMarker&&saved.ConfirmedRing&&saved.CommandMarkerSeconds==10,"command visual defaults and settings persist");
+}
+
 var oldPurify = JsonConvert.DeserializeObject<SupportOptions>("{\"PurifyBeforeZantetsuken\":true}")!;
 oldPurify.Sanitize();Check(!oldPurify.PurifyBeforeZantetsuken,"saved enabled auto Purify is disabled on upgrade");
 Check(CommandFeedback.Format("ja","bind|silence").Contains("バインド") && CommandFeedback.Format("ja","bind|silence").Contains("沈黙"),"observed simultaneous disabling effects remain distinguishable");
@@ -103,6 +133,10 @@ Check(world.StatusReads <= 7200, "72 players: at most 7200 status-list reads in 
 Console.WriteLine($"SIMULATION 10s / 6000 frames / 72 players: scans={tracker.ScanCount}, candidates={tracker.CandidateReads}, statusLists={world.StatusReads}, hostElapsedMs={watch.Elapsed.TotalMilliseconds:F3}");
 
 Loc.CheckCompleteness();
+foreach(var language in Loc.Languages)
+    foreach(var key in new[]{"CommandMarker","CommandMarkerHelp","ConfirmedRing","ConfirmedRingHelp","FeedbackColor","FeedbackSize","FeedbackHeight","FeedbackDuration","FeedbackWidth","CommandRingUnavailable"})
+        Check(!Loc.Get(language.Code,key).Contains("???"),"command feedback text survives UTF-8: "+language.Code+"/"+key);
+
 foreach (var (code, _) in Loc.Languages)
 {
     var c = new Configuration { Language = code, ShowLine = false, ShowMarker = true, LineWidth = 2.5f,
