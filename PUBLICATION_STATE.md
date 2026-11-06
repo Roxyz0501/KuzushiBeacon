@@ -1,3 +1,9 @@
+## 2026-11-07 - PvP Supporter 1.1.0.12
+
+- Release https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.12 at c0317b822f21b2ee751051d2118898e3f110c05d. Anonymous public ZIP 219902 bytes, SHA256 00650B935E1FC8AFD4E8CEA6BE249C7724069949ED7D12D7C6E8C3D215AE5601. Eight entries, DLL, manifest, repo and icon checked.
+- Shared index 256540607b88200c361cde33eb179d8111aec54f. Committed index verified, 15 other entries preserved. Ordinary raw URL initially returned 1.1.0.12.
+- Fixed viewport clipping, receipt handling through delayed frames/overlapping presses and feedback lifecycle. 794 managed checks, 144 host checks, 504 headless UI frames. Release build zero warnings/errors. Live post-fix game rendering and native receipt-time sampling unverified.
+
 ## 2026-11-04 - PvP Supporter 1.1.0.11 command feedback
 
 - Release: https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.11
