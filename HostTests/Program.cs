@@ -30,15 +30,17 @@ void Check(bool result, string description)
     selected(target,123,false);
     Check(state.Selected==target&&host.Count("ui:Draw")==1&&host.Count("framework:Update")==1,"actual selected-target callback starts temporary feedback independently of other overlays");
     Check(Field("confirmationReader")==null&&!state.Waiting,"selection-only command does not hook action confirmation");
+    Call("Reconcile");
+    Check(state.Selected==target && host.Count("ui:Draw")==1,"reconciling idle general overlays preserves temporary command feedback");
     var readerType=pt.Assembly.GetType("KuzushiBeacon.ActionConfirmationReader")!;
     var reader=Activator.CreateInstance(readerType,Field("interop"),Field("log"))!;
     pt.GetField("confirmationReader",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,reader);
     Call("CommandActionRequested",target,123u,(ushort)7);
     Check(state.Waiting&&state.RingCenter==null,"request acceptance alone has no confirmed ring");
-    void Receive(uint owner,uint action,ulong targetId,ushort sequence)
+    void Receive(uint owner,uint action,ulong targetId,ushort sequence,double? at=null,System.Numerics.Vector3? impact=null)
     {
         var effectType=pt.Assembly.GetType("KuzushiBeacon.ActionConfirmation")!;
-        var effect=Activator.CreateInstance(effectType,owner,action,(byte)1,targetId,sequence,Now());
+        var effect=Activator.CreateInstance(effectType,owner,action,(byte)1,targetId,sequence,at??Now(),impact);
         var queue=readerType.GetField("received",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(reader)!;
         queue.GetType().GetMethod("Enqueue")!.Invoke(queue,[effect]);
         readerType.GetField("queued",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(reader,1);
@@ -53,6 +55,11 @@ void Check(bool result, string description)
     Check(host.Count("ui:Draw")==0&&host.Count("framework:Update")==0,"expiry removes all temporary callbacks");
     selected(target,123,false);Call("CommandActionRequested",target,123u,(ushort)8);host.FeedbackTargetPresent=false;
     Receive(123,29537,500,8);Check(state.RingCenter==null&&!state.Waiting,"missing target does not produce a stale-position ring");
+    selected(target,123,false);
+    state.Request(123,target,9,Now()-1.2);
+    Receive(123,29537,500,9,Now()-.8,host.FeedbackTargetPosition);
+    Check(state.RingCenter==host.FeedbackTargetPosition && state.MarkerImpact==state.RingCenter,
+        "an on-time receipt survives a delayed update and despawn, preserving the marked impact position");
     host.Pvp=false;host.Raise("client:LeavePvP");
     Check(!state.Visible&&!state.Waiting&&host.Count("ui:Draw")==0&&host.Count("framework:Update")==0,"PvP exit clears feedback immediately");
     selected(target,123,false);Check(!state.Visible,"outside-PvP selection cannot restart feedback");

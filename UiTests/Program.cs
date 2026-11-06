@@ -132,6 +132,28 @@ internal static unsafe class Program
    ImGui.NewFrame();Call("DrawCommandVisuals");ImGui.Render();frames++;
    if(ImGui.GetDrawData().TotalVtxCount==0)throw new Exception("Command marker/ring drawing is empty");
    Renderer.Render(ImGui.GetDrawData(),textures,Path.Combine(output,"command-feedback.bmp"));
+   UiStub.NearTopEdge=true;
+   visual.HideRing();
+   void CheckCommandGeometry(string failure)
+   {
+       ImGui.NewFrame();
+       var draw = ImGui.GetForegroundDrawList(ImGui.GetMainViewport());
+       var before = draw.VtxBuffer.Size;
+       Call("DrawCommandVisuals");
+       if (draw.VtxBuffer.Size <= before) throw new Exception(failure);
+       ImGui.Render();frames++;
+   }
+   CheckCommandGeometry("Visible enemy lost its marker at the top edge");
+   var clip=type.GetMethod("ClipRingSegment",BindingFlags.Static|BindingFlags.NonPublic)!;
+   object[] line={new System.Numerics.Vector2(-40,10),new System.Numerics.Vector2(160,50),System.Numerics.Vector2.Zero,new System.Numerics.Vector2(100,100),default(System.Numerics.Vector2),default(System.Numerics.Vector2)};
+   if(!(bool)clip.Invoke(null,line)! || (System.Numerics.Vector2)line[4]!=new System.Numerics.Vector2(0,18) || (System.Numerics.Vector2)line[5]!=new System.Numerics.Vector2(100,38))
+       throw new Exception("Ring crossing viewport with both endpoints outside must remain visible");
+   UiStub.NearTopEdge=false;
+   visual.HideMarker();
+   visual.ShowRing(System.Numerics.Vector3.Zero,now,10);
+   UiStub.RingAcrossViewport=true;
+   CheckCommandGeometry("Visible ring arcs were discarded when no sampled endpoint was inside the viewport");
+   UiStub.RingAcrossViewport=false;
    visual.Clear();
    foreach(var language in Loc.Languages)
    {

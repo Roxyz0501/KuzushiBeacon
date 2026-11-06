@@ -7,11 +7,12 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 
 namespace KuzushiBeacon;
 
-internal readonly record struct ActionConfirmation(uint Owner,uint Action,byte Type,ulong Target,ushort Sequence,double At);
+internal readonly record struct ActionConfirmation(uint Owner,uint Action,byte Type,ulong Target,ushort Sequence,double At,Vector3? TargetPosition);
 
 // Observe the existing receive entry point. Never alter arguments, packets or game state.
 internal sealed unsafe class ActionConfirmationReader(IGameInteropProvider interop,IPluginLog log) : IDisposable
 {
+    public Func<ulong,Vector3?>? SamplePosition { get; init; }
     private delegate void Receive(uint caster,Character* character,Vector3* position,ActionEffectHandler.Header* header,
         ActionEffectHandler.TargetEffects* effects,GameObjectId* targets);
     private Hook<Receive>? hook;
@@ -47,9 +48,14 @@ internal sealed unsafe class ActionConfirmationReader(IGameInteropProvider inter
         {
             if(owner!=0&&caster==owner&&header!=null&&header->ActionId==Zantetsuken.ActionId&&header->ActionType==1)
             {
+                var targetId = header->AnimationTargetId.Id;
+                var receivedAt = System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+                Vector3? center = null;
+                try { center = SamplePosition?.Invoke(targetId); }
+                catch { /* The framework update can still resolve the matched actor. */ }
                 if(Interlocked.Increment(ref queued)<=16)
-                    received.Enqueue(new(caster,header->ActionId,header->ActionType,header->AnimationTargetId.Id,
-                        header->SourceSequence,System.Diagnostics.Stopwatch.GetTimestamp()/(double)System.Diagnostics.Stopwatch.Frequency));
+                    received.Enqueue(new(caster,header->ActionId,header->ActionType,targetId,
+                        header->SourceSequence,receivedAt,center));
                 else Interlocked.Decrement(ref queued);
             }
         }

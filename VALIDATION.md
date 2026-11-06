@@ -1,3 +1,11 @@
+# 1.1.0.12 intermittent Zantetsuken feedback - 2026-11-07
+
+- Previous renderer discarded an entire marker when its configured height was above the viewport and dropped crossing ring segments unless both endpoints were inside. Previous confirmation handling discarded receipts before matching if the next tick was over 0.5 seconds late. Replacing a pending identical request also discarded its original start time. The old headless projector always returned true for every position, masking the clipping failure.
+- Verified independently with production draw-list vertex deltas for a visible enemy with an off-screen marker and a ring crossing the viewport with every sampled endpoint outside. Clipped endpoints checked against the analytical intersection. Projection contract: https://github.com/goatcorp/Dalamud/blob/master/Dalamud/Game/Gui/GameGui.cs .
+- Receipt-time capture reads the current target with matching full ID only on the framework thread, before handing the original event back unchanged. Copies one position into the bounded receipt queue. Otherwise the consumer resolves the already-validated object slot. Late frames within the bounded receipt window are processed; the marker can retain its own confirmed impact location when the actor disappears. Repeated queued presses preserve the original request start. No extra game actions or packet sends.
+- Checked bounded expiry, duplicates, retargets, wrong actors/sequences, missing/reused targets, no idle callbacks, idle monitor reconciliation, and an injected 0.8-second-delayed receipt after despawn. Local pre-update logs showed three LB result events but had no information about specific rendered frames. This does not establish which issue occurred in that match. Live rendering/receipt-time position sampling after the fix remain untested.
+- 794 managed checks, 144 host checks and 504 headless production UI frames passed.
+
 # 1.1.0.11 command target marker and confirmed ring - 2026-11-04
 
 - Added independent local feedback for explicit Zantetsuken commands: selected-target marker (default 3 seconds) and fixed 5m ring (default 2 seconds). Separate toggles, colors, height, size/width and lifetime; dependent controls hidden when off. Seven-language settings rendered and glyph coverage checked. Fixed new text encoding before publication and corrected the previous release announcement.

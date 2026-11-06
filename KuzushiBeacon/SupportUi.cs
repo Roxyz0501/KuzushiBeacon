@@ -409,14 +409,46 @@ public sealed partial class Plugin
     private void DrawWorldRing(ImDrawListPtr draw,Vector3 center,float radius,uint color,float? width=null)
     {
         const int segments=48;
-        Vector2 previous=default;bool previousVisible=false;
+        var viewport = ImGui.GetMainViewport();
+        var min = viewport.Pos;
+        var max = min + viewport.Size;
+        Vector2 previous=default;bool previousInFront=false;
         for(int i=0;i<=segments;i++)
         {
             var angle=i*MathF.Tau/segments;
-            var visible=Project(center+new Vector3(MathF.Cos(angle)*radius,.05f,MathF.Sin(angle)*radius),out var point);
-            if(visible&&previousVisible)draw.AddLine(previous,point,color,width??config.LineWidth);
-            previous=point;previousVisible=visible;
+            var worldPoint = center+new Vector3(MathF.Cos(angle)*radius,.05f,MathF.Sin(angle)*radius);
+            var inFront = gui.WorldToScreen(worldPoint,out var point,out _) && float.IsFinite(point.X) && float.IsFinite(point.Y);
+            if(inFront && previousInFront && ClipRingSegment(previous,point,min,max,out var start,out var end))
+                draw.AddLine(start,end,color,width??config.LineWidth);
+            previous=point;previousInFront=inFront;
         }
+    }
+    private static bool ClipRingSegment(Vector2 a, Vector2 b, Vector2 min, Vector2 max, out Vector2 start, out Vector2 end)
+    {
+        start = a;
+        end = b;
+        if (a.X >= min.X && a.X <= max.X && b.X >= min.X && b.X <= max.X &&
+            a.Y >= min.Y && a.Y <= max.Y && b.Y >= min.Y && b.Y <= max.Y) return true;
+
+        // Intersect the projected line with each viewport axis before submitting vertices to ImGui.
+        double enter = 0, leave = 1;
+        static bool ClipAxis(float p, float q, float low, float high, ref double enter, ref double leave)
+        {
+            if (p == q) return p >= low && p <= high;
+            double delta = (double)q - p;
+            var first = (low - (double)p) / delta;
+            var last = (high - (double)p) / delta;
+            enter = Math.Max(enter, Math.Min(first,last));
+            leave = Math.Min(leave, Math.Max(first,last));
+            return enter <= leave;
+        }
+        if (!ClipAxis(a.X,b.X,min.X,max.X,ref enter,ref leave) || !ClipAxis(a.Y,b.Y,min.Y,max.Y,ref enter,ref leave))
+            return false;
+        var dx = (double)b.X-a.X;
+        var dy = (double)b.Y-a.Y;
+        start = new((float)(a.X+enter*dx),(float)(a.Y+enter*dy));
+        end = new((float)(a.X+leave*dx),(float)(a.Y+leave*dy));
+        return true;
     }
     private void DrawDirection(ImDrawListPtr draw,Vector3 from,Vector3 to,uint color,string label)
     {

@@ -12,6 +12,8 @@ public unsafe class UiStub : DispatchProxy
     public static string Directory = "";
     public static int Saves, Removes;
     public static bool Pvp;
+    public static bool NearTopEdge;
+    public static bool RingAcrossViewport;
     public static List<ImFontPtr> Fonts = [];
     public static List<GCHandle> Pins = [];
     public ImFontPtr Font;
@@ -32,7 +34,14 @@ public unsafe class UiStub : DispatchProxy
             case "get_CurrentMp": return 4000U;
             case "get_HitboxRadius": return .5f;
             case "WorldToScreen":
-                var pos=(System.Numerics.Vector3)args![0]!;args[1]=new System.Numerics.Vector2(750+pos.X*20,500-pos.Y*20+pos.Z*10);if(args.Length>2)args[2]=true;return true;
+                var pos=(System.Numerics.Vector3)args![0]!;
+                var projected=new System.Numerics.Vector2(750+pos.X*20,(NearTopEdge?10:500)-pos.Y*20+pos.Z*10);
+                if (RingAcrossViewport) projected.X = 750 + (pos.X - .32f) * 6000;
+                args[1]=projected;
+                var inside=projected.X>0 && projected.X<1440 && projected.Y>0 && projected.Y<900;
+                if(args.Length==2)return inside;
+                args[2]=inside;
+                return true;
             case "GetPluginConfig": return Config;
             case "GetPluginConfigDirectory": return Directory;
             case "SavePluginConfig": Saves++; return null;

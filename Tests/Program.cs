@@ -15,6 +15,10 @@ void Check(bool result, string name)
 {
     var a=new Actor(1,100,100,new(1,0,0),true,true);var b=new Actor(2,101,101,new(9,0,0),true,true);
     var v=new ZantetsukenVisualState();v.Select(a,0,3);v.Request(10,a,7,0);
+    var queued = new ZantetsukenVisualState();
+    queued.Request(10,a,null,5);
+    queued.Request(10,a,null,5.2);
+    Check(queued.Confirm(10,29537,1,100,8,5.1)==a,"a repeated queued press preserves a received result awaiting the next tick");
     Check(v.Selected==a&&v.RingCenter==null&&v.Waiting,"selection shows marker without confirming ring");
     Check(v.Confirm(11,29537,1,100,7,.1)==null&&v.Confirm(10,1,1,100,7,.1)==null
         &&v.Confirm(10,29537,2,100,7,.1)==null&&v.Confirm(10,29537,1,101,7,.1)==null

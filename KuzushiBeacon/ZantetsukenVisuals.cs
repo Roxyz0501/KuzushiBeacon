@@ -22,7 +22,7 @@ public sealed partial class Plugin
             commandVisuals.Select(target,commandPreparedAt,S.CommandMarker?S.CommandMarkerSeconds:0);
             if(execute&&S.ConfirmedRing)
             {
-                confirmationReader??=new(interop,log);
+                confirmationReader??=new(interop,log) { SamplePosition = SampleImpactPosition };
                 if(!confirmationReader.Enable(owner)&&!confirmationWarning)
                 {confirmationWarning=true;chat.Print("PvP Supporter: "+T("CommandRingUnavailable"));}
             }
@@ -46,6 +46,16 @@ public sealed partial class Plugin
         {position=actor.Position;return float.IsFinite(position.X)&&float.IsFinite(position.Y)&&float.IsFinite(position.Z);}
         position=default;return false;
     }
+    private Vector3? SampleImpactPosition(ulong targetId)
+    {
+        // The selected enemy can disappear during the original action-effect handler.
+        // Only touch Dalamud objects on the framework thread, and copy a value before forwarding.
+        if (!framework.IsInFrameworkUpdateThread) return null;
+        var actor = targets.Target;
+        if (actor == null || !actor.IsValid() || actor.GameObjectId != targetId) return null;
+        var position = actor.Position;
+        return float.IsFinite(position.X) && float.IsFinite(position.Y) && float.IsFinite(position.Z) ? position : null;
+    }
     private void UpdateCommandVisuals(IFramework _)
     {
         try
@@ -57,10 +67,13 @@ public sealed partial class Plugin
             if(confirmationReader!=null)
                 while(confirmationReader.TryRead(out var effect))
                 {
-                    if(now-effect.At>.5)continue;
+                    if (now-effect.At >= 3) continue;
                     var target=commandVisuals.Confirm(effect.Owner,effect.Action,effect.Type,effect.Target,effect.Sequence,effect.At);
-                    if(target is {} confirmed&&TryCommandPosition(confirmed,out var center))
-                        commandVisuals.ShowRing(center,now,S.ConfirmedRingSeconds);
+                    if (target is not {} confirmed) continue;
+                    if (effect.TargetPosition is {} impact)
+                        commandVisuals.ShowRing(impact,now,S.ConfirmedRingSeconds,confirmed);
+                    else if (TryCommandPosition(confirmed,out var center))
+                        commandVisuals.ShowRing(center,now,S.ConfirmedRingSeconds,confirmed);
                 }
             commandVisuals.Expire(now);
             if(!commandVisuals.Waiting)confirmationReader?.Disable();
@@ -85,14 +98,34 @@ public sealed partial class Plugin
         {
             if(!CommandVisualsAllowed)return;
             var now=Now;
-            var draw=ImGui.GetForegroundDrawList();
-            if(S.CommandMarker&&now<commandVisuals.MarkerUntil&&commandVisuals.Selected is {} target
-                &&TryCommandPosition(target,out var position)&&Project(position+Vector3.UnitY*S.CommandMarkerHeight,out var head))
-                DrawMarker(draw,head,S.CommandMarkerSize,ImGui.ColorConvertFloat4ToU32(S.CommandMarkerColor),S.CommandMarkerColor.W);
+            var viewport = ImGui.GetMainViewport();
+            var draw=ImGui.GetForegroundDrawList(viewport);
+            if(S.CommandMarker&&now<commandVisuals.MarkerUntil&&commandVisuals.Selected is {} target)
+            {
+                var location = TryCommandPosition(target,out var live) ? live : commandVisuals.MarkerImpact;
+                if (location is {} position && TryMarkerTip(position,viewport,out var head))
+                    DrawMarker(draw,head,S.CommandMarkerSize,ImGui.ColorConvertFloat4ToU32(S.CommandMarkerColor),S.CommandMarkerColor.W);
+            }
             if(S.ConfirmedRing&&now<commandVisuals.RingUntil&&commandVisuals.RingCenter is {} center)
                 DrawWorldRing(draw,center+Vector3.UnitY*S.ConfirmedRingHeight,Zantetsuken.Radius,
                     ImGui.ColorConvertFloat4ToU32(S.ConfirmedRingColor),S.ConfirmedRingWidth);
         }
         catch(Exception ex){ClearCommandVisuals();log.Warning(ex,"Local Zantetsuken drawing stopped.");}
+    }
+    private bool TryMarkerTip(Vector3 position, ImGuiViewportPtr viewport, out Vector2 tip)
+    {
+        var inFront = gui.WorldToScreen(position + Vector3.UnitY * S.CommandMarkerHeight, out tip, out var inView);
+        if (!inFront || !float.IsFinite(tip.X) || !float.IsFinite(tip.Y) || !inView)
+        {
+            // Keep the marker with a visible enemy even when its configured height projects off-screen.
+            if (!Project(position, out var feet)) return false;
+            if (!inFront || !float.IsFinite(tip.X) || !float.IsFinite(tip.Y)) tip = feet;
+        }
+        var size = S.CommandMarkerSize;
+        var minimum = viewport.Pos + new Vector2(size + 1, size * 1.5f + 1);
+        var maximum = viewport.Pos + viewport.Size - new Vector2(size + 1, 1);
+        if (maximum.X < minimum.X || maximum.Y < minimum.Y) return false;
+        tip = Vector2.Clamp(tip, minimum, maximum);
+        return true;
     }
 }

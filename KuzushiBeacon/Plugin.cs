@@ -225,7 +225,12 @@ public sealed partial class Plugin : IDalamudPlugin
                 ReconcileLedger();
                 supportMonitorRequested=S.NeedsMonitor;supportOverlayRequested=S.NeedsOverlay;
                 monitorRequested=OwnHighlightsEnabled||CountHighlightEnabled||supportMonitorRequested;
-                if (!MonitoringAllowed()) { Stop(); return; }
+                if (!MonitoringAllowed())
+                {
+                    if (!faulted && CommandVisualsAllowed) StopMonitoring();
+                    else Stop();
+                    return;
+                }
                 var needsDraw=OwnHighlightsEnabled||CountHighlightEnabled||supportOverlayRequested;
                 if(needsDraw!=overlaySubscribed)
                 {
@@ -248,6 +253,11 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         ClearCommandVisuals();
         ResetRequest();
+        StopMonitoring();
+    }
+
+    private void StopMonitoring()
+    {
         if (subscribed)
         {
             framework.Update -= Update;
