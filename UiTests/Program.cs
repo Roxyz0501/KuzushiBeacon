@@ -155,6 +155,27 @@ internal static unsafe class Program
    CheckCommandGeometry("Visible ring arcs were discarded when no sampled endpoint was inside the viewport");
    UiStub.RingAcrossViewport=false;
    visual.Clear();
+   UiStub.ProjectedRange=[];
+   var gauge=true;
+   Set("readFullLb",(Func<bool>)(()=>gauge));
+   Call("SetRangeDraw",true);
+   foreach(var center in new[]{System.Numerics.Vector3.Zero,new System.Numerics.Vector3(3,2,4)})
+   {
+       UiStub.PlayerPosition=center;
+       UiStub.ProjectedRange.Clear();
+       ImGui.NewFrame();
+       var draw=ImGui.GetForegroundDrawList(ImGui.GetMainViewport());
+       var before=draw.VtxBuffer.Size;
+       Call("DrawZantetsukenRange");
+       if(draw.VtxBuffer.Size<=before || UiStub.ProjectedRange.Count==0 || UiStub.ProjectedRange.Any(p=>
+           Math.Abs(new System.Numerics.Vector2(p.X-center.X,p.Z-center.Z).Length()-20)>.001f || Math.Abs(p.Y-center.Y-.05f)>.001f))
+           throw new Exception("Range ring must follow the Samurai at a fixed horizontal radius of 20m");
+       ImGui.Render();frames++;
+   }
+   gauge=false;UiStub.ProjectedRange.Clear();
+   ImGui.NewFrame();Call("DrawZantetsukenRange");ImGui.Render();frames++;
+   if(UiStub.ProjectedRange.Count!=0)throw new Exception("Spent LB must stop ring projection immediately");
+   Call("SetRangeDraw",false);UiStub.ProjectedRange=null;UiStub.PlayerPosition=default;
    foreach(var language in Loc.Languages)
    {
     UiStub.Config.Language=language.Code;float hiddenHeight=0;

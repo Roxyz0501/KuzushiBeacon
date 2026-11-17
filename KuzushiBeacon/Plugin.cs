@@ -223,14 +223,20 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 if (disposed) return; // Unloaded before the queued first tick.
                 ReconcileLedger();
+                var rangeEnabled = !faulted && config.Enabled && S.ZantetsukenSupport && S.ShowZantetsukenRange
+                    && !S.DisabledGroups.Contains(2) && client.IsLoggedIn && client.IsPvPExcludingDen;
+                // Job 0 can occur briefly during zoning. Resolve it when the player becomes available.
+                rangeEnabled = rangeEnabled && playerState.ClassJob.RowId is 0 or Rules.SamuraiJob;
                 supportMonitorRequested=S.NeedsMonitor;supportOverlayRequested=S.NeedsOverlay;
                 monitorRequested=OwnHighlightsEnabled||CountHighlightEnabled||supportMonitorRequested;
                 if (!MonitoringAllowed())
                 {
                     if (!faulted && CommandVisualsAllowed) StopMonitoring();
                     else Stop();
+                    SetRangeDraw(rangeEnabled);
                     return;
                 }
+                SetRangeDraw(rangeEnabled);
                 var needsDraw=OwnHighlightsEnabled||CountHighlightEnabled||supportOverlayRequested;
                 if(needsDraw!=overlaySubscribed)
                 {
@@ -251,6 +257,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void Stop()
     {
+        SetRangeDraw(false);
         ClearCommandVisuals();
         ResetRequest();
         StopMonitoring();

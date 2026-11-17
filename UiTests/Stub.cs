@@ -14,6 +14,8 @@ public unsafe class UiStub : DispatchProxy
     public static bool Pvp;
     public static bool NearTopEdge;
     public static bool RingAcrossViewport;
+    public static System.Numerics.Vector3 PlayerPosition;
+    public static List<System.Numerics.Vector3>? ProjectedRange;
     public static List<ImFontPtr> Fonts = [];
     public static List<GCHandle> Pins = [];
     public ImFontPtr Font;
@@ -26,7 +28,8 @@ public unsafe class UiStub : DispatchProxy
             case "get_Item": return Pvp?Create<Dalamud.Game.ClientState.Objects.Types.IGameObject,UiStub>():null;
             case "get_LocalPlayer": return Pvp?Create<Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter,UiStub>():null;
             case "IsValid": return true;
-            case "get_Position": return new System.Numerics.Vector3(0,0,0);
+            case "get_Position": return PlayerPosition;
+            case "get_ClassJob": return new Lumina.Excel.RowRef<Lumina.Excel.Sheets.ClassJob>(null!,Rules.SamuraiJob,null);
             case "get_GameObjectId": return 1UL;
             case "get_EntityId": return 1U;
             case "get_CurrentHp": return 10000U;
@@ -35,6 +38,7 @@ public unsafe class UiStub : DispatchProxy
             case "get_HitboxRadius": return .5f;
             case "WorldToScreen":
                 var pos=(System.Numerics.Vector3)args![0]!;
+                ProjectedRange?.Add(pos);
                 var projected=new System.Numerics.Vector2(750+pos.X*20,(NearTopEdge?10:500)-pos.Y*20+pos.Z*10);
                 if (RingAcrossViewport) projected.X = 750 + (pos.X - .32f) * 6000;
                 args[1]=projected;

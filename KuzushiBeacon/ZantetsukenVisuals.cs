@@ -6,6 +6,34 @@ namespace KuzushiBeacon;
 
 public sealed partial class Plugin
 {
+    private bool rangeDrawSubscribed;
+    private double nextRangeCheck;
+
+    private void SetRangeDraw(bool enabled)
+    {
+        if (enabled == rangeDrawSubscribed) return;
+        if (enabled) pi.UiBuilder.Draw += DrawZantetsukenRange;
+        else pi.UiBuilder.Draw -= DrawZantetsukenRange;
+        rangeDrawSubscribed = enabled;
+        nextRangeCheck = 0;
+    }
+
+    private void DrawZantetsukenRange()
+    {
+        if (!rangeDrawSubscribed || !client.IsPvPExcludingDen) return;
+        var now = Now;
+        if (now < nextRangeCheck) return;
+        var player = objects.LocalPlayer;
+        if (player == null || !player.IsValid() || player.ClassJob.RowId != Rules.SamuraiJob ||
+            player.IsDead || !readFullLb())
+        {
+            nextRangeCheck = now + .1;
+            return;
+        }
+        DrawWorldRing(ImGui.GetForegroundDrawList(ImGui.GetMainViewport()),player.Position,Zantetsuken.TargetRange,
+            ImGui.ColorConvertFloat4ToU32(S.ZantetsukenRangeColor),S.ZantetsukenRangeWidth);
+    }
+
     private readonly ZantetsukenVisualState commandVisuals=new();
     private ActionConfirmationReader? confirmationReader;
     private double commandPreparedAt;

@@ -60,7 +60,7 @@ internal sealed unsafe class GameZantetsukenAction(IClientState client, IObjectT
     {
         var player = objects.LocalPlayer;
         var actor = Resolve(candidate);
-        if(player != null && actor != null && LowHpTarget.InRange(player.Position, player.HitboxRadius, actor.Position, actor.HitboxRadius, 20))
+        if(player != null && actor != null && LowHpTarget.InRange(player.Position, player.HitboxRadius, actor.Position, actor.HitboxRadius, Zantetsuken.TargetRange))
             anyCandidateInRange = true;
         return CanReach(candidate);
     }

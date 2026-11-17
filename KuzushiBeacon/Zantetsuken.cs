@@ -15,6 +15,7 @@ public static class Zantetsuken
 {
     public const uint ActionId = 29537;
     public const float Radius = 5;
+    public const float TargetRange = 20;
 
     // A fresh, bounded snapshot per explicit invocation, independent of overlay settings/cache.
     public static bool Execute(bool allowed, uint owner, Vector3 origin, ulong currentTarget,

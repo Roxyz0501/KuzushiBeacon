@@ -1,3 +1,8 @@
+# 1.1.0.13 - full-LB Samurai targeting range (2026-11-17)
+
+- Real plugin lifecycle tests cover entering on another job, switching to Samurai, the range feature alone with no ordinary overlay, checking an empty gauge at most once per 100 ms, no enemy scans, toggle off and PvP exit. Active drawing checks the current gauge and follows the current player each frame.
+- Headless production rendering tested at two player positions. Every projected vertex is 20m horizontally from the current player, follows changes in elevation, and appears without a target. Spending LB produces zero projections on the next draw. 149 host checks and 507 UI frames passed. Native PvP rendering remains unverified.
+
 # 1.1.0.12 intermittent Zantetsuken feedback - 2026-11-07
 
 - Previous renderer discarded an entire marker when its configured height was above the viewport and dropped crossing ring segments unless both endpoints were inside. Previous confirmation handling discarded receipts before matching if the next tick was over 0.5 seconds late. Replacing a pending identical request also discarded its original start time. The old headless projector always returned true for every position, masking the clipping failure.

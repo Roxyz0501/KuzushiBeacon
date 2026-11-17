@@ -141,6 +141,17 @@ public sealed partial class Plugin
                 ImGui.Unindent();
             }
             changed|=DrawCommandVisualSettings();
+            changed |= ImGui.Checkbox(Label("ZantetsukenRange"),ref S.ShowZantetsukenRange);
+            HoverHelp(T("ZantetsukenRangeHelp"));
+            if (S.ShowZantetsukenRange)
+            {
+                ImGui.PushID("ZantetsukenRangeStyle");
+                ImGui.Indent();
+                changed |= PickColor(Label("FeedbackColor"),ref S.ZantetsukenRangeColor);
+                changed |= ImGui.SliderFloat(Label("FeedbackWidth"),ref S.ZantetsukenRangeWidth,.5f,8,"%.1f px");
+                ImGui.Unindent();
+                ImGui.PopID();
+            }
             changed|=DrawFeatureToggle(FeatureCatalog.ById[43]);
             changed|=DrawFeatureToggle(FeatureCatalog.ById[44]);
             changed|=DrawFeatureToggle(FeatureCatalog.ById[45]);

@@ -14,6 +14,28 @@ void Check(bool result, string description)
     checks++;
 }
 
+// Range display alone never needs the world scanner, including when there are no enemies.
+{
+    var host = new Host { Pvp=true, Job=21 };
+    host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
+    host.Config.Support.Features=[];
+    host.Config.Support.ShowZantetsukenRange = new SupportOptions().ShowZantetsukenRange;
+    using var plugin=host.Load();
+    Check(host.Count("ui:Draw")==0 && host.Count("framework:Update")==0,"other jobs have no range callback");
+    host.Job=Rules.SamuraiJob;
+    host.Raise("client:ClassJobChanged",host.Job);
+    Check(host.Count("ui:Draw")==1 && host.Count("framework:Update")==0,"Samurai range alone needs only a drawing callback");
+    for(int i=0;i<50;i++)host.Raise("ui:Draw");
+    Check(host.GaugeReads>0 && host.GaugeReads<50 && host.PlayerEnumerations==0,"empty gauge checks are throttled without enemy scans");
+    host.Config.Support.ShowZantetsukenRange=false;
+    typeof(Plugin).GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
+    Check(host.Count("ui:Draw")==0,"disabling the ring detaches its callback");
+    host.Config.Support.ShowZantetsukenRange=true;
+    host.Raise("client:Login");
+    host.Pvp=false;host.Raise("client:LeavePvP");
+    Check(host.Count("ui:Draw")==0,"leaving PvP detaches the range display");
+}
+
 // Real plugin feedback lifecycle, with native receipt replaced only by a value-queue injection.
 {
     var host=new Host{Pvp=true,FeedbackTargetPresent=true};
@@ -422,7 +444,7 @@ sealed class Host
     private object? player;
     public Queue<(Action Action, TaskCompletionSource Completion)> Queue { get; } = [];
     public readonly Dictionary<string, CommandInfo> Commands = [];
-    public Configuration Config=new(){Language="ja"};
+    public Configuration Config=new(){Language="ja",Support=new(){ShowZantetsukenRange=false}};
     public string ConfigDirectory=Path.GetFullPath("artifacts/host-config-"+Guid.NewGuid().ToString("N"));
     public bool Pvp;
     public bool ThrowOnRead;

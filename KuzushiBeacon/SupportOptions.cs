@@ -81,6 +81,9 @@ public sealed class SupportOptions
     public bool ZantetsukenSupport=true, SamuraiNotifications=true;
     public bool PurifyBeforeZantetsuken = false;
     public bool CommandMarker=true, ConfirmedRing=true;
+    public bool ShowZantetsukenRange = true;
+    public Vector4 ZantetsukenRangeColor = new(1f,.76f,.2f,.9f);
+    public float ZantetsukenRangeWidth = 2f;
     public float CommandMarkerSize=18, CommandMarkerHeight=4.5f, CommandMarkerSeconds=3;
     public Vector4 CommandMarkerColor=new(1,.25f,.8f,1);
     public float ConfirmedRingWidth=2, ConfirmedRingHeight=0, ConfirmedRingSeconds=2;
@@ -183,6 +186,8 @@ public sealed class SupportOptions
         KuzushiTone=Math.Clamp(KuzushiTone,0,2);LbTone=Math.Clamp(LbTone,0,2);DangerTone=Math.Clamp(DangerTone,0,2);
         Vector4 Color(Vector4 c)=>new(F(c.X,0,1,1),F(c.Y,0,1,1),F(c.Z,0,1,1),F(c.W,0,1,1));
         CommandMarkerSize=F(CommandMarkerSize,5,40,18);CommandMarkerHeight=F(CommandMarkerHeight,0,6,4.5f);
+        ZantetsukenRangeColor = Color(ZantetsukenRangeColor);
+        ZantetsukenRangeWidth = F(ZantetsukenRangeWidth,.5f,8,2);
         CommandMarkerSeconds=F(CommandMarkerSeconds,.25f,10,3);CommandMarkerColor=Color(CommandMarkerColor);
         ConfirmedRingWidth=F(ConfirmedRingWidth,.5f,8,2);ConfirmedRingHeight=F(ConfirmedRingHeight,0,3,0);
         ConfirmedRingSeconds=F(ConfirmedRingSeconds,.25f,10,2);ConfirmedRingColor=Color(ConfirmedRingColor);
