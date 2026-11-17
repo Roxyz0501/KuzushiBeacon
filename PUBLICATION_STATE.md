@@ -1,3 +1,9 @@
+## 2026-11-17 - PvP Supporter 1.1.0.14
+
+- Release https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.14 at a9aee3199343b2eb1ecbdaf24214f65955bef9eb. Public ZIP 221050 bytes, SHA256 5C0EB329710E3769389F22D5CDD064CF81F66A17CF3F73F8ACE24A4CA7FFEDE4. Anonymous ZIP, DLL, manifest, eight entries, repository and icon verified.
+- Shared index 7abea545288a7ea4a8fc9564fef2e15fa527d062. Committed index verified with 16 other entries preserved. Initial ordinary raw URL version 1.1.0.13.
+- 20m ring height defaults to 0.5m above the player's feet and is adjustable from 0 to 3m. 507 headless UI frames passed, including projections at default and custom heights after moving. Release build zero warnings/errors. In-game terrain visibility unverified.
+
 ## 2026-11-17 - PvP Supporter 1.1.0.13
 
 - Release https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.13 at fd1622e5f18d73d9e90655b456953a364e5df488. Public ZIP 221006 bytes, SHA256 5DCC4F6E98C49D3001EE0D7EE96E48F7C678E436BCC431B89ADD0327DD6DD120. Anonymous ZIP, DLL, manifest, eight entries, repository and icon verified.
