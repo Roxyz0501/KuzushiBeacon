@@ -1,3 +1,9 @@
+## 2026-11-17 - PvP Supporter 1.1.0.13
+
+- Release https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.13 at fd1622e5f18d73d9e90655b456953a364e5df488. Public ZIP 221006 bytes, SHA256 5DCC4F6E98C49D3001EE0D7EE96E48F7C678E436BCC431B89ADD0327DD6DD120. Anonymous ZIP, DLL, manifest, eight entries, repository and icon verified.
+- Shared index d9685de8acd1169832c4c2f5afbf362a8a2864cc. Committed index verified with 16 other entries preserved. Initial ordinary raw URL version 1.1.0.12.
+- Full-LB 20m targeting ring follows the local Samurai. Defaults on, with independent color/width. 794 managed checks, 149 host checks, 507 headless UI frames. Release build zero warnings/errors. Native live match rendering unverified.
+
 ## 2026-11-07 - PvP Supporter 1.1.0.12
 
 - Release https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.12 at c0317b822f21b2ee751051d2118898e3f110c05d. Anonymous public ZIP 219902 bytes, SHA256 00650B935E1FC8AFD4E8CEA6BE249C7724069949ED7D12D7C6E8C3D215AE5601. Eight entries, DLL, manifest, repo and icon checked.
