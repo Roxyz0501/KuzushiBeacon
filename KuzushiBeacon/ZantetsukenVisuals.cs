@@ -31,7 +31,7 @@ public sealed partial class Plugin
             return;
         }
         DrawWorldRing(ImGui.GetForegroundDrawList(ImGui.GetMainViewport()),player.Position,Zantetsuken.TargetRange,
-            ImGui.ColorConvertFloat4ToU32(S.ZantetsukenRangeColor),S.ZantetsukenRangeWidth);
+            ImGui.ColorConvertFloat4ToU32(S.ZantetsukenRangeColor),S.ZantetsukenRangeWidth,S.ZantetsukenRangeHeight);
     }
 
     private readonly ZantetsukenVisualState commandVisuals=new();

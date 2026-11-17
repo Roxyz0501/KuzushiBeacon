@@ -159,6 +159,7 @@ internal static unsafe class Program
    var gauge=true;
    Set("readFullLb",(Func<bool>)(()=>gauge));
    Call("SetRangeDraw",true);
+   var expectedHeight=.5f;
    foreach(var center in new[]{System.Numerics.Vector3.Zero,new System.Numerics.Vector3(3,2,4)})
    {
        UiStub.PlayerPosition=center;
@@ -168,9 +169,11 @@ internal static unsafe class Program
        var before=draw.VtxBuffer.Size;
        Call("DrawZantetsukenRange");
        if(draw.VtxBuffer.Size<=before || UiStub.ProjectedRange.Count==0 || UiStub.ProjectedRange.Any(p=>
-           Math.Abs(new System.Numerics.Vector2(p.X-center.X,p.Z-center.Z).Length()-20)>.001f || Math.Abs(p.Y-center.Y-.05f)>.001f))
-           throw new Exception("Range ring must follow the Samurai at a fixed horizontal radius of 20m");
+           Math.Abs(new System.Numerics.Vector2(p.X-center.X,p.Z-center.Z).Length()-20)>.001f || Math.Abs(p.Y-center.Y-expectedHeight)>.001f))
+           throw new Exception("Range ring must follow the Samurai at the configured height and a horizontal radius of 20m");
        ImGui.Render();frames++;
+       expectedHeight=1.25f;
+       UiStub.Config.Support.ZantetsukenRangeHeight=expectedHeight;
    }
    gauge=false;UiStub.ProjectedRange.Clear();
    ImGui.NewFrame();Call("DrawZantetsukenRange");ImGui.Render();frames++;

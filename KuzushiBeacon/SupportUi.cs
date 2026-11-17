@@ -406,7 +406,7 @@ public sealed partial class Plugin
         }
         supportDraws+=drawn;
     }
-    private void DrawWorldRing(ImDrawListPtr draw,Vector3 center,float radius,uint color,float? width=null)
+    private void DrawWorldRing(ImDrawListPtr draw,Vector3 center,float radius,uint color,float? width=null,float height=.05f)
     {
         const int segments=48;
         var viewport = ImGui.GetMainViewport();
@@ -416,7 +416,7 @@ public sealed partial class Plugin
         for(int i=0;i<=segments;i++)
         {
             var angle=i*MathF.Tau/segments;
-            var worldPoint = center+new Vector3(MathF.Cos(angle)*radius,.05f,MathF.Sin(angle)*radius);
+            var worldPoint = center+new Vector3(MathF.Cos(angle)*radius,height,MathF.Sin(angle)*radius);
             var inFront = gui.WorldToScreen(worldPoint,out var point,out _) && float.IsFinite(point.X) && float.IsFinite(point.Y);
             if(inFront && previousInFront && ClipRingSegment(previous,point,min,max,out var start,out var end))
                 draw.AddLine(start,end,color,width??config.LineWidth);

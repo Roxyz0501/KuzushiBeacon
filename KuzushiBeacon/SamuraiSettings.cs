@@ -149,6 +149,7 @@ public sealed partial class Plugin
                 ImGui.Indent();
                 changed |= PickColor(Label("FeedbackColor"),ref S.ZantetsukenRangeColor);
                 changed |= ImGui.SliderFloat(Label("FeedbackWidth"),ref S.ZantetsukenRangeWidth,.5f,8,"%.1f px");
+                changed |= ImGui.SliderFloat(Label("FeedbackHeight"),ref S.ZantetsukenRangeHeight,0,3,"%.1f m");
                 ImGui.Unindent();
                 ImGui.PopID();
             }
