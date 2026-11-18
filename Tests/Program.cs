@@ -365,6 +365,9 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     Check(crowd[1].Distance(Vector3.Zero,.5f)==3,"hitbox adjusted displayed distance");
     Check(!(crowd[0] with{Guard=true}).Eligible(true,false)&&!(crowd[0] with{Invulnerable=true}).Eligible(false,true),"independent status exclusions");
     var w=new FakeWorld();foreach(var o in crowd.Where(o=>o.Enemy)){w.Actors.Add(o.Actor);w.Statuses[o.Actor.Index]=(3202,1,2);}
+    var cached=new SnapshotWorld(crowd,new Dictionary<int,float>{{crowd[0].Actor.Index,2}},1,.5);
+    Check(cached.OwnKuzushiRemaining(crowd[0].Actor.Index,1)==1.5f&&cached.OwnKuzushiRemaining(crowd[0].Actor.Index,9)==0
+        &&cached.OwnKuzushiRemaining(crowd[1].Actor.Index,1)==0,"shared snapshot preserves source, age and absent marks");
     var a=new FakeAction();
     Check(!Zantetsuken.Execute(true,1,Vector3.Zero,0,w,a,4)&&a.Attempts==0,"minimum coverage blocks native request");
     Check(!Zantetsuken.Execute(true,1,Vector3.Zero,0,w,a,2,x=>x.EntityId!=3)&&a.Attempts==0,"excluded victim is not counted");
@@ -387,6 +390,9 @@ Check(!Zantetsuken.ShowCount(true, 3, 10, 10), "expired snapshot hides count");
     p.SetAllFeatures(false);Check(!p.NeedsMonitor&&p.Features.Count==0&&p.SmallFeatures.Count==0&&p.LargeFeatures.Count==0,"disable all clears every profile");
     p.Features=[96,31];Check(p.NeedsEnemyStatuses(false)&&!p.NeedsSelfStatuses,"Kuzushi labels read enemy statuses only");
     p.Features=[96,37];Check(p.NeedsSelfStatuses&&!p.NeedsOtherActors(false),"Chiten alone does not scan other actors");
+    p.Features=[59];Check(!p.NeedsOtherActors(false,healing:false)&&p.NeedsOtherActors(false,healing:true),"Elixir approach scans only while casting");
+    p.Features=[41];Check(!p.NeedsLb(false)&&p.NeedsLb(true)&&!p.NeedsOtherActors(false,full:false),"Samurai recommendation gates gauge and actor reads");
+    p.Features=[39];Check(p.NeedsLb(false)&&!p.NeedsOtherActors(false),"shared LB notification still reads the gauge on other jobs");
     p.Features=[77];p.CurrentLarge=true;p.LargeFeatures=[79,80,83];p.SmallFeatures=[79];p.SetCategoryFeatures(5,false);
     Check(!p.Features.Contains(77)&&p.LargeFeatures.Count==0&&p.SmallFeatures.Contains(79),"category disable keeps edits on original profile when profile switch is turned off");
     p.UpdateMs=500;Check(p.SnapshotInterval(true,100)==100&&p.SnapshotInterval(false,100)==500,"legacy interval affects shared sampling");

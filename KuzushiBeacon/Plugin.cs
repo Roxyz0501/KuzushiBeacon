@@ -46,6 +46,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool subscribed;
     private bool overlaySubscribed;
     private bool monitorRequested, supportMonitorRequested, supportOverlayRequested;
+    private bool visualWithoutLb, visualWithLb;
     private volatile bool disposed;
     private bool faulted;
     private readonly Persistence.SettingsStore settingsStore;
@@ -228,7 +229,10 @@ public sealed partial class Plugin : IDalamudPlugin
                     && !S.DisabledGroups.Contains(2) && client.IsLoggedIn && client.IsPvPExcludingDen;
                 // Job 0 can occur briefly during zoning. Resolve it when the player becomes available.
                 rangeEnabled = rangeEnabled && playerState.ClassJob.RowId is 0 or Rules.SamuraiJob;
-                supportMonitorRequested=S.NeedsMonitor;supportOverlayRequested=S.NeedsOverlay;
+                supportMonitorRequested=S.NeedsMonitor;
+                visualWithoutLb=S.HasVisualFeatures(false);
+                visualWithLb=S.HasVisualFeatures(true);
+                supportOverlayRequested=visualWithLb||S.HasNotifications;
                 monitorRequested=OwnHighlightsEnabled||CountHighlightEnabled||supportMonitorRequested;
                 if (!MonitoringAllowed())
                 {
@@ -299,7 +303,8 @@ public sealed partial class Plugin : IDalamudPlugin
             var updateAt=Now;
             if(!(OwnHighlightsEnabled||CountHighlightEnabled)&&updateAt<nextSupport)return;
             SupportUpdate(updateAt);
-            if(!(OwnHighlightsEnabled||CountHighlightEnabled))return;
+            if(!(OwnHighlightsEnabled||CountHighlightEnabled)||updateAt<nextLegacyUpdate)return;
+            nextLegacyUpdate=updateAt+config.ScanIntervalMs/1000d;
             // LocalPlayer can disappear during zoning. Keep the PvP callback alive
             // so detection resumes without requiring another client-state event.
             var player = objects.LocalPlayer;
@@ -307,11 +312,9 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 tracker.Clear();
                 maximumCount = 0;
-                trackedOwner = 0;nextLegacyUpdate=0;
+                trackedOwner = 0;
                 return;
             }
-            if(updateAt<nextLegacyUpdate)return;
-            nextLegacyUpdate=updateAt+config.ScanIntervalMs/1000d;
             var full = CountHighlightEnabled||S.KuzushiFullLbOnly ? supportMonitorRequested?fullLb:readFullLb() : false;
             if(!LegacyScanRequired(full))
             {tracker.Clear();maximumCount=0;countExpiresAt=0;trackedOwner=0;return;}
@@ -321,7 +324,7 @@ public sealed partial class Plugin : IDalamudPlugin
             // Reuse one bounded scan for both overlays. Count must not depend on highlight distance.
             tracker.Update(true, now, player.EntityId, player.Position,
                 CountHighlightEnabled && full ? float.MaxValue : config.MaxDistance, config.ScanIntervalMs,
-                sharedSnapshot ? new SnapshotWorld(observations,player.EntityId,now-supportAt) : world);
+                sharedSnapshot ? new SnapshotWorld(observations,snapshotKuzushi,player.EntityId,now-supportAt) : world);
             if (previousScan == tracker.ScanCount) return;
             eligibleHighlights.Clear();
             if(sharedSnapshot)

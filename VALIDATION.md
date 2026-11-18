@@ -1,3 +1,7 @@
+# 1.1.0.16 - idle work audit (2026-11-18)
+
+802 managed checks, 155 host lifecycle checks, 2791 Ledger checks and 507 headless UI frames passed. The host checks count object reads, actor enumerations and callback subscriptions. They cover PvP exit, disabled outputs, both settings of selective scanning, LB readiness transitions, tracking without an ally, and 600 updates between scheduled samples. Synthetic tests cover Elixir casting, Samurai vs shared gauge consumers and lookup of expiring marks in a shared snapshot. General AoE features still use their own enable conditions. No live client CPU, FPS or frame-time measurement was made.
+
 # 1.1.0.15 plugin audit (2026-11-18)
 
 Reviewed command dispatch and targeting, configuration gates, actor sampling, alerts, LB feedback, overlays, match recording, persistence and export paths. Fixed shared throttling of mute/tracking/target-only commands, stale recommendations after Kuzushi expiration, stale request state, disabled Samurai category handling and false approach alerts on first sighting. Regression tests cover independent command dispatch and per-enemy approach history. Excluded the native SQLite library from managed references in the three test harnesses.

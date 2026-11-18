@@ -306,7 +306,7 @@ public sealed partial class Plugin
         if(!MonitoringAllowed()||!supportOverlayRequested)return;
         var now=Now;
         PlayAlerts(now);
-        if(!S.HasVisualFeatures(fullLb)&&!alerts.Any(a=>Work(a.Key)&&a.Value.Until>now))return;
+        if(!(fullLb?visualWithLb:visualWithoutLb)&&(alerts.Count==0||!alerts.Any(a=>Work(a.Key)&&a.Value.Until>now)))return;
         if(supportAt==0||now-supportAt>(On(98)?S.StaleSeconds:2))return;
         var player=objects.LocalPlayer;
         if(player==null||!player.IsValid())return;
@@ -347,7 +347,9 @@ public sealed partial class Plugin
             if(On(29))foreach(var c in attackCandidates)
                 rows.Add($"HP {c.Hp} · {c.Distance(player.Position,player.HitboxRadius):F1}m · {(c.Guard?"Guard ":"")}{(c.Invulnerable?"Invulnerable":"")}"+
                     (On(30)?L(" · HP順 / 射程内"," · HP order / in range"):""));
-            foreach(var o in observations)
+            var actorLabels = S.KuzushiVisible(fullLb)&&(On(31)||On(36)) || fullLb&&recommended.HasValue&&Work(41)
+                || On(69) || focusedEnemy.HasValue&&On(74) || trackedAlly!=0&&(On(67)||On(83));
+            if(actorLabels) foreach(var o in observations)
             {
                 var distance=o.Distance(player.Position,player.HitboxRadius);
                 var included=o.Eligible(S.ZantetsukenExcludeGuard,S.ZantetsukenExcludeInvulnerable);

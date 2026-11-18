@@ -135,20 +135,23 @@ public sealed class SupportOptions
         && (id != 56 || FocusHud || FocusOverhead)
         && (id != 93 || WorkEnabled(46));
     private bool AnyWork(params ReadOnlySpan<int> ids) { foreach(var id in ids)if(WorkEnabled(id))return true;return false; }
-    public bool NeedsSelfStatuses => !On(96) || AnyWork(37,38,51,53,54,55,60);
-    private bool NeedsKuzushiActors(bool full) => AnyWork(33,35,38)
-        || KuzushiVisible(full)&&AnyWork(31,36) || full&&AnyWork(40,41,88,89);
-    public bool NeedsEnemyStatuses(bool legacy,bool full=true) => legacy || !On(96) || NeedsKuzushiActors(full)
+    public bool NeedsSelfStatuses => AnyWork(37,38,51,53,54,55,60);
+    private bool NeedsKuzushiActors(bool full,bool samurai) =>
+        KuzushiVisible(full)&&WorkEnabled(36) || samurai && (AnyWork(33,35,38)
+        || KuzushiVisible(full)&&WorkEnabled(31) || full&&AnyWork(40,41,88,89));
+    public bool NeedsEnemyStatuses(bool legacy,bool full=true,bool samurai=true) => legacy || !On(96) || NeedsKuzushiActors(full,samurai)
         || (ExcludeGuard||ExcludeInvulnerable) && (NeedsAreaComparison||AnyWork(20,21,29));
-    public bool NeedsOtherActors(bool legacy,bool full=true) => legacy || !On(96) || NeedsKuzushiActors(full)
+    public bool NeedsOtherActors(bool legacy,bool full=true,bool samurai=true,bool tracking=true,bool healing=true) => legacy || NeedsKuzushiActors(full,samurai)
+        || tracking&&AnyWork(67,68,83) || healing&&WorkEnabled(59)
         || AnyWork(16,17,19,20,21,22,23,24,27,28,29,
-            56,57,58,59,61,62,63,64,65,66,67,68,69,71,73,74,75,83,92);
+            56,57,58,61,62,63,64,65,66,69,71,73,74,75,92);
     public bool NeedsAreaComparison => AnyWork(22,23,24);
-    public bool NeedsLb => AnyWork(39,40,41,87,88,89);
+    public bool NeedsLb(bool samurai) => AnyWork(39,87) || samurai && AnyWork(40,41,88,89);
     public bool HasVisualFeatures(bool full) => FeatureCatalog.All.Any(f => f.Id is >=16 and <=75
         && f.Id is not (25 or 26 or 30 or 32 or 43 or 60) && !NotificationFeatures.Contains(f.Id)
         && (f.Id != 41 || full) && (f.Id is not (31 or 36) || KuzushiVisible(full)) && WorkEnabled(f.Id)) || WorkEnabled(83);
-    public bool NeedsOverlay => HasVisualFeatures(true) || NotificationFeatures.Any(WorkEnabled);
+    public bool HasNotifications => NotificationFeatures.Any(WorkEnabled);
+    public bool NeedsOverlay => HasVisualFeatures(true) || HasNotifications;
     public int SnapshotInterval(bool legacy,int legacyInterval) => legacy?Math.Min(UpdateMs,legacyInterval):UpdateMs;
     public bool On(int id, bool? large = null)
     {

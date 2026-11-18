@@ -73,22 +73,32 @@ internal sealed partial class LedgerModule : IDisposable
         command = new((_, _) => Open()) { HelpMessage = T("CommandHelp") };
         
         worker = Task.Run(Worker);
-        client.EnterPvP += StartTicks; client.LeavePvP += OnLeft; chat.LogMessage += OnLog;
+        client.EnterPvP += OnEnterPvP; client.LeavePvP += OnLeft;
         duty.DutyStarted += OnStart; duty.DutyRecommenced += OnRecommence; duty.DutyCompleted += OnEnd;
         client.TerritoryChanged += OnTerritory; client.Login += OnLogin; client.Logout += OnLogout;
-        OnLogin(); if(client.IsPvPExcludingDen)StartTicks();
+        OnLogin(); if(client.IsPvPExcludingDen)OnEnterPvP();
     }
     private string T(string key) => Loc.Get(config.Language, key);
     private void Open() { open = true; StartTicks(); if (historyRevision != store.Revision) LoadHistory(); }
     public void SetVisible(bool visible) { open=visible; if(visible)StartTicks(); }
     private void StartTicks() { if(disposed||ticking)return;framework.Update+=Update;ticking=true; }
-    private void OnLeft() { DrainResults(); Finish(current?.Ended==null); lastMatch=null; ReconcileDraw(); }
+    private bool listeningToLog;
+    private void SetLogListener(bool enabled)
+    {
+        if (enabled == listeningToLog) return;
+        if (enabled) chat.LogMessage += OnLog;
+        else chat.LogMessage -= OnLog;
+        listeningToLog = enabled;
+    }
+    private void OnEnterPvP() { SetLogListener(client.IsPvPExcludingDen); StartTicks(); }
+    private void OnLeft() { SetLogListener(false); DrainResults(); Finish(current?.Ended==null); lastMatch=null; ReconcileDraw(); }
     private void QueueCompletion(System.Action action)
     {
         if(!disposed)completions.Enqueue(action);
     }
     private void OnLogin()
     {
+        SetLogListener(client.IsPvPExcludingDen);
         if (!player.IsLoaded || player.ContentId == 0) return;
         var nextOwner = HistoryStore.OwnerKey(player.ContentId);
         if (owner != nextOwner)
@@ -101,12 +111,14 @@ internal sealed partial class LedgerModule : IDisposable
     }
     private void OnLogout(int _, int __)
     {
+        SetLogListener(false);
         DrainResults();
         Finish(true); FlushJobs(); owner = ""; history = []; detail = null; lastMatch = null; historyGeneration++;
         loading = detailLoading = false; historyRevision = -1; count = page = 0; finishedTerritory = 0;
     }
     private void OnTerritory(uint territory)
     {
+        SetLogListener(client.IsPvPExcludingDen);
         DrainResults();
         if (current != null && current.Territory != territory) Finish(current.Ended == null);
         if (finishedTerritory != territory) finishedTerritory = 0;
@@ -289,7 +301,7 @@ internal sealed partial class LedgerModule : IDisposable
         if(disposed)return;
         disposed=true;
         pi.UiBuilder.Draw -= Draw; drawing=false;
-        framework.Update -= Update; ticking=false; client.EnterPvP-=StartTicks; client.LeavePvP-=OnLeft; chat.LogMessage -= OnLog; duty.DutyStarted -= OnStart;
+        framework.Update -= Update; ticking=false; client.EnterPvP-=OnEnterPvP; client.LeavePvP-=OnLeft; SetLogListener(false); duty.DutyStarted -= OnStart;
         duty.DutyRecommenced -= OnRecommence; duty.DutyCompleted -= OnEnd;
         client.TerritoryChanged -= OnTerritory; client.Login -= OnLogin; client.Logout -= OnLogout;
         native.Dispose();

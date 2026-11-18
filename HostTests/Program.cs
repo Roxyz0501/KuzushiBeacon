@@ -115,6 +115,21 @@ foreach(var feature in new[]{24,33,35,39,40,46,47,48,57,58,59,63,65,68})
     var reads=host.ObjectReads;for(int i=0;i<600;i++)host.Raise("framework:Update",host.Framework);
     Check(host.ObjectReads==reads&&host.PlayerEnumerations==0,"600 frames between support samples cause no player or actor reads");
 }
+foreach (var job in new[]{Rules.SamuraiJob,21u})
+{
+    var host=new Host {Pvp=true,Job=job};
+    host.Config.ShowLine=host.Config.ShowMarker=false;
+    host.Config.ShowMaxCount=true;
+    host.Config.Support.Features=[41];
+    using var plugin=host.Load();
+    host.Raise("framework:Update",host.Framework);
+    var sampled=host.ObjectReads;
+    foreach(var deadline in new[]{"nextLegacyUpdate","nextSupport"})
+        typeof(Plugin).GetField(deadline,BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,double.MaxValue);
+    for(int n=0;n<600;n++)host.Raise("framework:Update",host.Framework);
+    Check(host.PlayerEnumerations==0 && host.ObjectReads==sampled && host.Errors==0,
+        "LB-only display with optimization unchecked does no scan or between-sample reads");
+}
 foreach(var kind in new[]{"count","recommendation","kuzushi"})
 {
     var host=new Host {Pvp=true};host.Config.ShowLine=host.Config.ShowMarker=kind=="kuzushi";host.Config.ShowMaxCount=kind=="count";
@@ -140,6 +155,7 @@ foreach(var pvp in new[]{false,true})
     var host=new Host {Pvp=pvp};host.Config.ShowLine=host.Config.ShowMarker=host.Config.ShowMaxCount=false;
     host.Config.Support.Features=[];host.Config.Support.LedgerEnabled=true;
     using var plugin=host.Load();host.Raise("framework:Update",host.Framework);
+    Check(host.Count("chat:LogMessage")== (pvp?1:0),"Ledger receives combat log only in PvP");
     Check(host.Errors==0&&host.Count("ui:Draw")==0&&host.Count("framework:Update")==0,
         "idle Ledger has no update or draw callbacks, even in PvP before duty: "+pvp);
     host.Config.Support.LedgerEnabled=false;
@@ -229,20 +245,25 @@ foreach (var pvp in new[] { false, true })
     var host = new Host { Pvp = true, PlayerAvailable = false };
     using var plugin = host.Load();
     Check(host.Count("framework:Update") == 1, "PvP entry with missing player must keep recovery callback");
-    host.Raise("framework:Update", host.Framework);
+    void Sample()
+    {
+        typeof(Plugin).GetField("nextLegacyUpdate",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,0d);
+        host.Raise("framework:Update", host.Framework);
+    }
+    Sample();
     host.PlayerAvailable = true;
-    host.Raise("framework:Update", host.Framework);
+    Sample();
     Check(host.ValidityReads == 1 && host.PlayerEnumerations == 1, "player returning without another event resumes detection");
     host.PlayerAvailable = false;
-    host.Raise("framework:Update", host.Framework);
+    Sample();
     host.PlayerAvailable = true;
-    host.Raise("framework:Update", host.Framework);
+    Sample();
     Check(host.ValidityReads == 2 && host.PlayerEnumerations == 2, "temporary player disappearance must not permanently stop detection");
     host.Job = 0;
-    host.Raise("framework:Update", host.Framework);
+    Sample();
     Check(host.PlayerEnumerations == 2, "unavailable job never scans enemies");
     host.Job = Rules.SamuraiJob;
-    host.Raise("framework:Update", host.Framework);
+    Sample();
     Check(host.PlayerEnumerations == 3, "job availability resumes scan without a new event");
     host.Pvp = false;
     host.Raise("client:LeavePvP");
@@ -311,7 +332,11 @@ foreach (var pvp in new[] { false, true })
     using var plugin=host.Load();
     Check(host.Count("framework:Update")==1,"offscreen tracking alone subscribes to framework");
     host.Raise("framework:Update",host.Framework);
-    Check(host.PlayerEnumerations==1&&host.Errors==0,"standalone tracking performs a real snapshot without native status/gauge calls");
+    Check(host.PlayerEnumerations==0&&host.Errors==0,"tracking without a selected ally skips all actors");
+    typeof(Plugin).GetField("trackedAlly",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,123UL);
+    typeof(Plugin).GetField("nextSupport",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,0d);
+    host.Raise("framework:Update",host.Framework);
+    Check(host.PlayerEnumerations==1,"tracking starts sampling once an ally is selected");
     host.Config.Support.Features.Remove(83);
     typeof(Plugin).GetMethod("MarkDirty",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(plugin,null);
     Check(host.Count("framework:Update")==0,"disabling last tracking feature unsubscribes");

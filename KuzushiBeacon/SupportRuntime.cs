@@ -28,7 +28,8 @@ public sealed partial class Plugin
     private double nextPreDeath;
     private bool previousFull, previousOpportunity, previousDead, largeContent;
     private int previousOwn, previousNear, previousFocus, opportunities, peakCoverage;
-    private HashSet<ulong> previousMarked=[];
+    private readonly HashSet<ulong> previousMarked=[];
+    private readonly Dictionary<int,float> snapshotKuzushi=[];
     private ulong trackedAlly;
     private int nearbyEnemies,nearbyAllies,focusEnemies,sharedTarget;
     private float nearestAlly=float.PositiveInfinity, chiten,guardTime,resilience,selfHpRate;
@@ -71,21 +72,22 @@ public sealed partial class Plugin
         if(now<nextSupport)return;
         var watch=Stopwatch.StartNew();
         var player=objects.LocalPlayer;
-        if(player is null || !player.IsValid()){ClearSupport();return;}
+        if(player is null || !player.IsValid()){ClearSupport();nextSupport=now+S.UpdateMs/1000d;return;}
         if(reviewStarted==null&&reviewFailures<3&&Work(86)&&duty.IsDutyStarted&&!reviewCompleted)reviewStarted=DateTimeOffset.UtcNow;
         var elapsed=lastSupportTime==0?0:Math.Clamp(now-lastSupportTime,0,1);
         lastSupportTime=now;
         var samurai=player.ClassJob.RowId==Rules.SamuraiJob;
         var needLegacyLb=samurai&&(CountHighlightEnabled||OwnHighlightsEnabled&&S.KuzushiFullLbOnly);
-        fullLb=(S.NeedsLb||needLegacyLb||S.KuzushiFullLbOnly&&(Work(31)||Work(36)))&&readFullLb();
+        fullLb=(S.NeedsLb(samurai)||needLegacyLb||S.KuzushiFullLbOnly&&(samurai&&Work(31)||Work(36)))&&readFullLb();
         var legacy=samurai&&LegacyScanRequired(fullLb);
         nextSupport=now+S.SnapshotInterval(legacy,config.ScanIntervalMs)/1000d;
         var anyStatus=S.NeedsSelfStatuses;
-        var needOthers=S.NeedsOtherActors(legacy,fullLb);
+        healingCast=Work(59)&&player.IsCasting&&player.CastActionId==29055;
+        var needOthers=S.NeedsOtherActors(legacy,fullLb,samurai,trackedAlly!=0,healingCast);
         var completeKuzushi=fullLb&&samurai&&(CountHighlightEnabled||Work(41)||Work(89));
         var needRates=Work(27)||Work(28);
         var needSelfRate=Work(47);
-        observations.Clear();areaCandidates.Clear(); selfControls.Clear();
+        observations.Clear();snapshotKuzushi.Clear();areaCandidates.Clear(); selfControls.Clear();
         chiten=guardTime=resilience=0;
         var wasHp=hpHistory.GetValueOrDefault(player.GameObjectId);
         selfHpRate=needSelfRate&&wasHp.At>0&&now>wasHp.At?(float)((player.CurrentHp-(double)wasHp.Hp)/(now-wasHp.At)/(Math.Max(1,player.MaxHp))*100):0;
@@ -102,11 +104,10 @@ public sealed partial class Plugin
         var readinessStart=watch.Elapsed.TotalMilliseconds;
         guardReady=Work(50)&&Ready(29054,player.GameObjectId);
         purifyReady=Work(52)&&Ready(29056,player.GameObjectId);
-        healingCast=Work(59)&&player.IsCasting&&player.CastActionId==29055;
         RecordCost("39/50/52 LB + readiness",watch.Elapsed.TotalMilliseconds-readinessStart);
-        var currentTarget=targets.Target?.GameObjectId??0;
+        var currentTarget=needOthers ? targets.Target?.GameObjectId??0 : 0;
         int visited=0; bool approachingEnemy=false; nearbyEnemies=nearbyAllies=focusEnemies=sharedTarget=0;nearestAlly=float.PositiveInfinity;allyCenter=Vector3.Zero;
-        var needsEnemyStatus=S.NeedsEnemyStatuses(legacy,fullLb);
+        var needsEnemyStatus=needOthers && S.NeedsEnemyStatuses(legacy,fullLb,samurai);
         sharedSnapshot=legacy;
         if(needOthers)
         foreach(var entry in objects.PlayerObjects)
@@ -130,8 +131,9 @@ public sealed partial class Plugin
             var item=new Observation(new(p.ObjectIndex,p.EntityId,p.GameObjectId,p.Position,true,true),p.CurrentHp,p.MaxHp,p.HitboxRadius,enemy,ally,
                 p.TargetObjectId,own,other,guard,invulnerable,rate,rate>0);
             observations.Add(item);
+            if(legacy&&own>0)snapshotKuzushi[p.ObjectIndex]=own;
             var distance=item.Distance(player.Position,player.HitboxRadius);
-            if(Work(59)&&enemy)
+            if(healingCast&&enemy)
             {
                 approachingEnemy |= SupportMath.ObserveApproach(approachDistances,p.GameObjectId,distance);
             }
@@ -145,9 +147,10 @@ public sealed partial class Plugin
         }
         if(nearbyAllies>0)allyCenter/=nearbyAllies;
         // Bounded history: remove actors not observed this tick. No names/IDs persist to disk.
-        observedIds.Clear();foreach(var o in observations)observedIds.Add(o.Actor.ObjectId);
+        observedIds.Clear();
+        if(needRates||healingCast)foreach(var o in observations)observedIds.Add(o.Actor.ObjectId);
         foreach(var key in hpHistory.Keys.Where(k=>k==player.GameObjectId?!needSelfRate:!needRates||!observedIds.Contains(k)).ToArray())hpHistory.Remove(key);
-        foreach(var key in approachDistances.Keys.Where(k=>!Work(59)||!observedIds.Contains(k)).ToArray())approachDistances.Remove(key);
+        foreach(var key in approachDistances.Keys.Where(k=>!healingCast||!observedIds.Contains(k)).ToArray())approachDistances.Remove(key);
         currentObservation=observations.Where(o=>o.Actor.ObjectId==currentTarget).Select(o=>(Observation?)o).FirstOrDefault();
         currentCoverage=currentObservation is {} current&&(Work(20)||Work(21)||Work(23))?SupportMath.Count(current,observations,S.AreaRadius,S.LowHpPercent,S.ExcludeGuard,S.ExcludeInvulnerable):default;
         var attackRange=SupportOptions.JobRange(player.ClassJob.RowId,S.MeleeRange,S.RangedRange);
@@ -173,8 +176,9 @@ public sealed partial class Plugin
             areaCandidates.Sort((a,b)=>b.Count!=a.Count?b.Count.CompareTo(a.Count):a.Center.Actor.EntityId.CompareTo(b.Center.Actor.EntityId));
         }
         RecordCost("area",watch.Elapsed.TotalMilliseconds-geometryStart);
-        var marked=observations.Where(o=>o.Enemy&&o.OwnKuzushi>0&&o.Eligible(S.ZantetsukenExcludeGuard,S.ZantetsukenExcludeInvulnerable)).ToArray();
-        var opportunity=fullLb&&player.ClassJob.RowId==Rules.SamuraiJob&&marked.Length>0;
+        var needMarked=samurai&&(Work(33)||Work(35)||Work(38)||fullLb&&(CountHighlightEnabled||Work(40)||Work(41)||Work(88)||Work(89)));
+        var marked=needMarked?observations.Where(o=>o.Enemy&&o.OwnKuzushi>0&&o.Eligible(S.ZantetsukenExcludeGuard,S.ZantetsukenExcludeInvulnerable)).ToArray():[];
+        var opportunity=fullLb&&marked.Length>0;
         recommended=null;supportLbCount=0;
         var lbStart=watch.Elapsed.TotalMilliseconds;
         if(opportunity&&(CountHighlightEnabled||Work(41)&&(S.BestMarker||S.BestLine)||Work(89)))
@@ -190,7 +194,7 @@ public sealed partial class Plugin
         var low=hpPercent<=S.LowHpPercent&&!player.IsDead;
         if(Work(93)&&!low&&!player.IsDead)lowHpSince=0;
         Alert(24,areaCandidates.Count>0&&areaCandidates[0].Count>=S.AlertCount,now,2);
-        Alert(33,marked.Any(o=>!previousMarked.Contains(o.Actor.ObjectId)),now,2,false);
+        Alert(33,Work(33)&&marked.Any(o=>!previousMarked.Contains(o.Actor.ObjectId)),now,2,false);
         Alert(35,previousOwn>0&&marked.Length==0,now,1,false);
         Alert(39,fullLb,now,2);Alert(40,opportunity,now,3);
         Alert(46,low,now,10);Alert(47,!player.IsDead&&selfHpRate<=-S.RapidLossPercent,now,9);
@@ -202,7 +206,7 @@ public sealed partial class Plugin
         Alert(59,healingCast&&approachingEnemy,now,8,false);
         Alert(63,nearbyEnemies-nearbyAllies-1>=S.Disadvantage,now,6);
         Alert(65,nearbyEnemies>0&&nearbyAllies==0,now,7);
-        var tracked=observations.Where(o=>o.Ally&&o.Actor.ObjectId==trackedAlly).Select(o=>(Observation?)o).FirstOrDefault();
+        var tracked=trackedAlly!=0&&Work(68)?observations.Where(o=>o.Ally&&o.Actor.ObjectId==trackedAlly).Select(o=>(Observation?)o).FirstOrDefault():null;
         Alert(68,tracked is {} t&&t.Distance(player.Position,player.HitboxRadius)>S.Separation,now,4);
         if(Work(60)&&!player.IsDead&&now>=nextPreDeath)
         {nextPreDeath=now+.5;preDeath.Enqueue(new(player.CurrentHp,player.CurrentMp,selfControls.Select(c=>c.Id).ToArray()));while(preDeath.Count>10)preDeath.Dequeue();}
@@ -213,7 +217,9 @@ public sealed partial class Plugin
             if(deathRecords.Count>50)deathRecords.RemoveAt(0);preDeath.Clear();lowHpSince=0;
         }
         previousDead=player.IsDead;previousFull=fullLb;previousOpportunity=opportunity;previousOwn=marked.Length;
-        previousMarked=marked.Select(o=>o.Actor.ObjectId).ToHashSet();previousNear=nearbyEnemies;previousFocus=focusEnemies;
+        previousMarked.Clear();
+        if(Work(33))foreach(var target in marked)previousMarked.Add(target.Actor.ObjectId);
+        previousNear=nearbyEnemies;previousFocus=focusEnemies;
 
         supportAt=now;supportScans++;supportReads+=visited;RecordCost("total",watch.Elapsed.TotalMilliseconds);
     }
@@ -231,7 +237,7 @@ public sealed partial class Plugin
     private double lastSoundAlert;
     private void PlayAlerts(double now)
     {
-        if(!NotificationsAllowed||!S.Sound||now<muteUntil)return;
+        if(alerts.Count==0||!NotificationsAllowed||!S.Sound||now<muteUntil)return;
         var candidates=alerts.Where(a=>Work(a.Key)&&a.Value.Until>now&&a.Value.Until>lastSoundAlert);
         var selected=Work(79)?candidates.OrderByDescending(a=>a.Value.Priority).FirstOrDefault():candidates.OrderBy(a=>a.Key).FirstOrDefault();
         if(selected.Value.Until<=0)return;
@@ -241,7 +247,7 @@ public sealed partial class Plugin
     }
     private void ClearSupport(bool clearTracking=true)
     {
-        observations.Clear();areaCandidates.Clear();hpHistory.Clear();approachDistances.Clear();alerts.Clear();alertLatch.Clear();previousMarked.Clear();
+        observations.Clear();snapshotKuzushi.Clear();areaCandidates.Clear();hpHistory.Clear();approachDistances.Clear();alerts.Clear();alertLatch.Clear();previousMarked.Clear();
         previousFull=previousOpportunity=previousDead=false;previousOwn=previousNear=previousFocus=0;
         supportAt=nextSupport=lastSupportTime=lowHpSince=0;recommended=null;if(clearTracking)trackedAlly=0;sharedSnapshot=false;supportLbCount=0;attackCandidates=[];
         localSound.Stop();lastSoundAlert=0;currentObservation=null;currentCoverage=default;coveragePartial=false;selfControls.Clear();

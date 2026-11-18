@@ -54,9 +54,9 @@ public sealed class AlertLatch
     public void Clear()=>states.Clear();
 }
 
-internal sealed class SnapshotWorld(IReadOnlyList<Observation> observations,uint owner,double age) : IHighlightWorld
+internal sealed class SnapshotWorld(IReadOnlyList<Observation> observations,IReadOnlyDictionary<int,float> remaining,uint owner,double age) : IHighlightWorld
 {
     public IEnumerable<Actor> Players => observations.Select(o=>o.Actor);
     public float OwnKuzushiRemaining(int index,uint sourceId) => sourceId!=owner?0:
-        Math.Max(0,observations.FirstOrDefault(o=>o.Actor.Index==index).OwnKuzushi-(float)age);
+        Math.Max(0,remaining.GetValueOrDefault(index)-(float)age);
 }
