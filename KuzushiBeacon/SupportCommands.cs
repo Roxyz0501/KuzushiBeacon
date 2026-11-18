@@ -56,17 +56,21 @@ public sealed partial class Plugin
         {
             await framework.RunOnFrameworkThread(()=>
             {
-                if(disposed||Now-requested>.5||Now<nextLowHpCommand)return;
-                nextLowHpCommand=Now+.25;
+                if(disposed)return;
                 if(command=="/pvpmute")
                 {
                     var seconds=string.IsNullOrWhiteSpace(args)?S.MuteSeconds:double.TryParse(args,NumberStyles.Float,CultureInfo.InvariantCulture,out var value)&&double.IsFinite(value)?Math.Clamp(value,0,3600):-1;
                     if(seconds>=0){muteUntil=Now+seconds;localSound.Stop();}return;
                 }
-                if(!config.Enabled||!client.IsLoggedIn||!client.IsPvPExcludingDen)return;
+                if(command=="/pvpztarget") {if(string.IsNullOrWhiteSpace(args))_=ExecuteZantetsukenAsync(true);return;}
+                if(!config.Enabled||!client.IsLoggedIn||!client.IsPvPExcludingDen||Now-requested>.5)return;
+                if (command!="/pvptrack")
+                {
+                    if(Now<nextLowHpCommand)return;
+                    nextLowHpCommand=Now+.25;
+                }
                 var player=objects.LocalPlayer;
                 if(player==null||!player.IsValid()||player.IsDead)return;
-                if(command=="/pvpztarget") {if(string.IsNullOrWhiteSpace(args))_=ExecuteZantetsukenAsync(true);return;}
                 if(command=="/pvptrack")
                 {
                     if(args.Trim()=="clear"){trackedAlly=0;return;}

@@ -13,6 +13,13 @@ void Check(bool result, string name)
 
 // Command feedback waits for the matching received action, never for a gauge/acceptance guess.
 {
+    var distances = new Dictionary<ulong,float>();
+    Check(!SupportMath.ObserveApproach(distances,1,8),"first sighting inside 10m is not measured approach");
+    Check(!SupportMath.ObserveApproach(distances,2,5),"a different enemy needs its own previous position");
+    Check(!SupportMath.ObserveApproach(distances,1,8),"stationary enemy does not trigger Elixir warning");
+    Check(SupportMath.ObserveApproach(distances,1,7),"observed enemy closing within 10m triggers Elixir warning");
+}
+{
     var a=new Actor(1,100,100,new(1,0,0),true,true);var b=new Actor(2,101,101,new(9,0,0),true,true);
     var v=new ZantetsukenVisualState();v.Select(a,0,3);v.Request(10,a,7,0);
     var queued = new ZantetsukenVisualState();

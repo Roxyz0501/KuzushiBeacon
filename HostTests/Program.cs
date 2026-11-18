@@ -320,10 +320,13 @@ foreach (var pvp in new[] { false, true })
     var host=new Host {Pvp=false};
     using var plugin=host.Load();
     host.Config.Support.MuteSeconds=123;
+    typeof(Plugin).GetField("nextLowHpCommand",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(plugin,double.MaxValue);
     var before=System.Diagnostics.Stopwatch.GetTimestamp()/(double)System.Diagnostics.Stopwatch.Frequency;
     host.Commands["/pvpmute"].Handler("/pvpmute","");
     var until=(double)typeof(Plugin).GetField("muteUntil",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(plugin)!;
     Check(until-before>=123&&until-before<124,"mute command consumes configured duration");
+    host.Commands["/pvpztarget"].Handler("/pvpztarget","");
+    Check(host.ChatMessages==1 && host.ObjectReads==0,"selection-only LB evaluates its own PvP gate during low HP cooldown");
 }
 {
     var host=new Host {Pvp=false,ConfigDirectory=Path.GetFullPath("artifacts/review-audit-"+Guid.NewGuid().ToString("N"))};

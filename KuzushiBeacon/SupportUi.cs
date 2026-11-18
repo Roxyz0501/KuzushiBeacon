@@ -361,7 +361,7 @@ public sealed partial class Plugin
                     }
                     if(On(36)&&o.OtherKuzushi>now-supportAt)LabelAt(o.Actor.Position+Vector3.UnitY*3.6f,L("他の侍 ◇","Other SAM ◇"),other,distance);
                 }
-                if(included&&fullLb&&On(41)&&recommended?.ObjectId==o.Actor.ObjectId&&drawn<(On(97)?S.MaxDraw:100))
+                if(included&&fullLb&&On(41)&&recommended?.ObjectId==o.Actor.ObjectId&&o.OwnKuzushi>now-supportAt&&drawn<(On(97)?S.MaxDraw:100))
                 {
                     if(S.BestMarker||S.BestLine)drawn++;
                     if(S.BestMarker&&Project(o.Actor.Position+Vector3.UnitY*S.BestMarkerHeight,out var bestHead))

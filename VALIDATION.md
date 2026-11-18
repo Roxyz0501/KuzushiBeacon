@@ -1,3 +1,9 @@
+# 1.1.0.15 plugin audit (2026-11-18)
+
+Reviewed command dispatch and targeting, configuration gates, actor sampling, alerts, LB feedback, overlays, match recording, persistence and export paths. Fixed shared throttling of mute/tracking/target-only commands, stale recommendations after Kuzushi expiration, stale request state, disabled Samurai category handling and false approach alerts on first sighting. Regression tests cover independent command dispatch and per-enemy approach history. Excluded the native SQLite library from managed references in the three test harnesses.
+
+798 managed checks, 150 host checks, 2791 Ledger checks and 507 headless UI frames passed. Release build zero warnings/errors. Tests use synthetic game data and a mocked webhook. Live PvP and physical performance were not tested.
+
 # 1.1.0.13 - full-LB Samurai targeting range (2026-11-17)
 
 - Real plugin lifecycle tests cover entering on another job, switching to Samurai, the range feature alone with no ordinary overlay, checking an empty gauge at most once per 100 ms, no enemy scans, toggle off and PvP exit. Active drawing checks the current gauge and follows the current player each frame.

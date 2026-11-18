@@ -123,7 +123,7 @@ public sealed partial class Plugin : IDalamudPlugin
             await framework.RunOnFrameworkThread(() =>
             {
                 if (disposed) return;
-                if (!config.Enabled || !S.ZantetsukenSupport) { CommandUnavailable("disabled"); return; }
+                if (!config.Enabled || !S.ZantetsukenSupport || S.DisabledGroups.Contains(2)) { CommandUnavailable("disabled"); return; }
                 if (!client.IsLoggedIn || !client.IsPvPExcludingDen) { CommandUnavailable("not pvp"); return; }
                 var player = objects.LocalPlayer;
                 if (player is null || !player.IsValid()) { CommandUnavailable("player unavailable"); return; }
@@ -139,6 +139,7 @@ public sealed partial class Plugin : IDalamudPlugin
                         world, zantetsukenAction, On(43)?S.MinimumZantetsuken:1, zantetsukenAction.Included,r=>reason=r);
                     CountCommand(targetOnly?"ztarget":"zantetsuken",success,reason);
                     if(zantetsukenAction.Gate.Pending)requestPhase=1;
+                    else if (requestPhase==1) requestPhase=0;
                     if (!success) CommandUnavailable(reason);
                     else if(On(99) && messages.Message(Now))chat.Print(L("検証：斬鉄剣の候補を選択しました（操作なし）","Dry run: selected a Zantetsuken candidate; no action performed."));
                 }
@@ -182,9 +183,9 @@ public sealed partial class Plugin : IDalamudPlugin
                     CommandUnavailable(reason);
                 }
             }
-            else { zantetsukenAction.Gate.Reset(); CommandUnavailable("gauge unavailable"); }
+            else { ResetRequest(); CommandUnavailable("gauge unavailable"); }
         }
-        catch (Exception ex) { zantetsukenAction.Gate.Reset(); if (CommandUnavailable("internal error")) log.Error(ex, "Could not observe pending LB request."); }
+        catch (Exception ex) { ResetRequest(); if (CommandUnavailable("internal error")) log.Error(ex, "Could not observe pending LB request."); }
         if (!zantetsukenAction.Gate.Pending && observingRequest)
         { framework.Update -= ObserveRequest; observingRequest = false; }
     }

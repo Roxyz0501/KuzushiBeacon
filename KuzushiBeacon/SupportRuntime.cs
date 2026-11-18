@@ -133,9 +133,7 @@ public sealed partial class Plugin
             var distance=item.Distance(player.Position,player.HitboxRadius);
             if(Work(59)&&enemy)
             {
-                var previous=approachDistances.GetValueOrDefault(p.GameObjectId,float.PositiveInfinity);
-                approachingEnemy|=distance<=10&&distance+.2f<previous;
-                approachDistances[p.GameObjectId]=distance;
+                approachingEnemy |= SupportMath.ObserveApproach(approachDistances,p.GameObjectId,distance);
             }
             if(enemy){if(distance<=S.NearbyRange)nearbyEnemies++;if(p.TargetObjectId==player.GameObjectId)focusEnemies++;}
             if(ally)
@@ -182,7 +180,7 @@ public sealed partial class Plugin
         if(opportunity&&(CountHighlightEnabled||Work(41)&&(S.BestMarker||S.BestLine)||Work(89)))
         {
             var candidates=marked.Select(o=>o.Actor).ToArray();
-            var best=Zantetsuken.FindBest(candidates,player.Position,targets.Target?.GameObjectId??0,zantetsukenAction.CanReach);
+            var best=Zantetsuken.FindBest(candidates,player.Position,currentTarget,zantetsukenAction.CanReach);
             recommended=best.Target;supportLbCount=best.Count;if(Work(89))peakCoverage=Math.Max(peakCoverage,best.Count);
         }
         RecordCost("41/89 LB coverage",watch.Elapsed.TotalMilliseconds-lbStart);

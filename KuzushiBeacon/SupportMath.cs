@@ -12,6 +12,12 @@ public readonly record struct Observation(Actor Actor, uint Hp, uint MaxHp, floa
 public readonly record struct Coverage(Observation Center, int Count, int LowCount);
 public static class SupportMath
 {
+    public static bool ObserveApproach(Dictionary<ulong,float> distances,ulong target,float distance)
+    {
+        var approaching = distances.TryGetValue(target,out var previous) && distance<=10 && distance+.2f<previous;
+        distances[target]=distance;
+        return approaching;
+    }
     public static Coverage Count(Observation center,IReadOnlyList<Observation> enemies,float radius,float lowPercent,bool excludeGuard=false,bool excludeInvulnerable=false)
     {
         int count=0,low=0;

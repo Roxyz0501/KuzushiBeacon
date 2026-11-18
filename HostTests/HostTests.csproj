@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="$(appdata)/XIVLauncher/addon/Hooks/dev/*.dll" Exclude="$(appdata)/XIVLauncher/addon/Hooks/dev/cimgui.dll;$(appdata)/XIVLauncher/addon/Hooks/dev/cimguizmo.dll;$(appdata)/XIVLauncher/addon/Hooks/dev/cimplot.dll;$(appdata)/XIVLauncher/addon/Hooks/dev/nethost.dll;$(appdata)/XIVLauncher/addon/Hooks/dev/Dalamud.Boot.dll" />
+    <Reference Include="$(appdata)/XIVLauncher/addon/Hooks/dev/*.dll" Exclude="$(appdata)/XIVLauncher/addon/Hooks/dev/cimgui.dll;$(appdata)/XIVLauncher/addon/Hooks/dev/cimguizmo.dll;$(appdata)/XIVLauncher/addon/Hooks/dev/cimplot.dll;$(appdata)/XIVLauncher/addon/Hooks/dev/nethost.dll;$(appdata)/XIVLauncher/addon/Hooks/dev/Dalamud.Boot.dll;$(appdata)/XIVLauncher/addon/Hooks/dev/e_sqlite3.dll" />
     <ProjectReference Include="../KuzushiBeacon/KuzushiBeacon.csproj" />
   </ItemGroup>
 </Project>
