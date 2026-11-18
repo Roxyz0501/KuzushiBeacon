@@ -1,3 +1,9 @@
+## 2026-11-18 - PvP Supporter 1.1.0.16
+
+- Release https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.16 at b7d423ba7f7a1910a9a965a38ebf2b6bc487396a. Anonymous ZIP, DLL, manifest, eight entries, repository and icon verified. ZIP 221595 bytes, SHA256 BEFA5F49C31857DEF330D49F836A528080EB623BD9B14364CE9E570BEBB13D2A.
+- Shared index 453019599844f0fc4881d26cd87c5cb5ea0922cb. Committed index verified with all 16 other entries preserved. Initial ordinary raw URL version 1.1.0.15.
+- Audited actor scans, LB gates, drawing and Ledger subscriptions. 802 managed checks, 155 host checks, 2791 Ledger checks and 507 headless UI frames passed. Release build zero warnings/errors. Live PvP performance unmeasured.
+
 ## 2026-11-18 - PvP Supporter 1.1.0.15
 
 - Release https://github.com/Roxyz0501/KuzushiBeacon/releases/tag/v1.1.0.15 at 278064133491d763b13f08ffe932fbb13e2ea0f8. Anonymous ZIP, DLL, manifest, eight entries, repository and icon verified. ZIP 221166 bytes, SHA256 40DCD4DFE7EE16BF01C96D8C62E7C8E9A459CE752B20C36ABA46DC48E17F83AE.
